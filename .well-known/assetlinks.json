@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.seztools.app",
+        "sha256_cert_fingerprints": ["D8:34:6E:70:2C:07:82:11:E7:92:54:1B:94:8C:34:82:A1:43:6C:C7:74:E4:FB:C2:E5:65:2D:EB:26:27:40:16"]
+      }
+    }]
