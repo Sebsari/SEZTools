@@ -110,14 +110,14 @@ const RED = '#9C3A32', BLUE = '#0B5FA5', AMBER = '#A67A1E';
 // NPS -> internal diameter (mm) by schedule. Values for unlisted schedules
 // fall back to Sch 40 dimensions (same approach used in Line Sizing).
 const PIPE_SIZES = {
-  40:[{nps:'1/8"',d:6.35},{nps:'1/4"',d:9.25},{nps:'3/8"',d:12.52},{nps:'1/2"',d:15.8},{nps:'3/4"',d:20.93},{nps:'1"',d:26.64},{nps:'1-1/4"',d:35.05},{nps:'1-1/2"',d:40.89},{nps:'2"',d:52.5},{nps:'2-1/2"',d:62.71},{nps:'3"',d:77.93},{nps:'3-1/2"',d:90.12},{nps:'4"',d:102.26},{nps:'5"',d:128.2},{nps:'6"',d:154.08},{nps:'8"',d:203.2},{nps:'10"',d:254.51},{nps:'12"',d:304.8},{nps:'14"',d:336.55},{nps:'16"',d:387.35},{nps:'18"',d:438.15},{nps:'20"',d:488.95},{nps:'22"',d:539.75},{nps:'24"',d:590.55}],
-  80:[{nps:'1/8"',d:5.26},{nps:'1/4"',d:7.75},{nps:'3/8"',d:10.72},{nps:'1/2"',d:13.87},{nps:'3/4"',d:18.85},{nps:'1"',d:24.31},{nps:'1-1/4"',d:32.46},{nps:'1-1/2"',d:38.1},{nps:'2"',d:49.25},{nps:'2-1/2"',d:58.88},{nps:'3"',d:73.66},{nps:'3-1/2"',d:85.45},{nps:'4"',d:97.18},{nps:'5"',d:122.25},{nps:'6"',d:146.33},{nps:'8"',d:193.68},{nps:'10"',d:242.82},{nps:'12"',d:288.93},{nps:'14"',d:317.5},{nps:'16"',d:363.53},{nps:'18"',d:409.58},{nps:'20"',d:455.63},{nps:'22"',d:501.68},{nps:'24"',d:546.1}]
+  40:[{nps:'1/8"',d:6.35},{nps:'1/4"',d:9.25},{nps:'3/8"',d:12.52},{nps:'1/2"',d:15.8},{nps:'3/4"',d:20.93},{nps:'1"',d:26.64},{nps:'1-1/4"',d:35.05},{nps:'1-1/2"',d:40.89},{nps:'2"',d:52.5},{nps:'2-1/2"',d:62.71},{nps:'3"',d:77.93},{nps:'3-1/2"',d:90.12},{nps:'4"',d:102.26},{nps:'5"',d:128.2},{nps:'6"',d:154.08},{nps:'8"',d:203.2},{nps:'10"',d:254.51},{nps:'12"',d:304.8},{nps:'14"',d:336.55},{nps:'16"',d:387.35},{nps:'18"',d:438.15},{nps:'20"',d:488.95},{nps:'22"',d:539.75},{nps:'24"',d:590.55},{nps:'26"',d:641.34},{nps:'28"',d:692.14},{nps:'30"',d:742.94},{nps:'32"',d:793.74},{nps:'34"',d:844.54},{nps:'36"',d:895.34},{nps:'42"',d:1047.74},{nps:'48"',d:1200.14}],
+  80:[{nps:'1/8"',d:5.26},{nps:'1/4"',d:7.75},{nps:'3/8"',d:10.72},{nps:'1/2"',d:13.87},{nps:'3/4"',d:18.85},{nps:'1"',d:24.31},{nps:'1-1/4"',d:32.46},{nps:'1-1/2"',d:38.1},{nps:'2"',d:49.25},{nps:'2-1/2"',d:58.88},{nps:'3"',d:73.66},{nps:'3-1/2"',d:85.45},{nps:'4"',d:97.18},{nps:'5"',d:122.25},{nps:'6"',d:146.33},{nps:'8"',d:193.68},{nps:'10"',d:242.82},{nps:'12"',d:288.93},{nps:'14"',d:317.5},{nps:'16"',d:363.53},{nps:'18"',d:409.58},{nps:'20"',d:455.63},{nps:'22"',d:501.68},{nps:'24"',d:546.1},{nps:'26"',d:635.0},{nps:'28"',d:685.8},{nps:'30"',d:736.6},{nps:'32"',d:787.4},{nps:'34"',d:838.2},{nps:'36"',d:889.0},{nps:'42"',d:1041.4},{nps:'48"',d:1193.8}]
 };
 [5,10,20,30,60,100,120,140,160,'STD','XS','XXS'].forEach(s => { PIPE_SIZES[s] = PIPE_SIZES[s] || PIPE_SIZES[40].map(p => ({d:p.d, nps:p.nps})); });
 const SCHEDULE_OPTIONS = [40,80,5,10,20,30,60,100,120,140,160,'STD','XS','XXS'].map(s => ({value:String(s), label:'Sch '+s}));
 // Nominal size in inches per NPS label — used for fitting K-tables (Crane
 // method factors are based on nominal size, not the exact internal diameter).
-const NPS_NOMINAL_IN = {'1/8"':0.125,'1/4"':0.25,'3/8"':0.375,'1/2"':0.5,'3/4"':0.75,'1"':1,'1-1/4"':1.25,'1-1/2"':1.5,'2"':2,'2-1/2"':2.5,'3"':3,'3-1/2"':3.5,'4"':4,'5"':5,'6"':6,'8"':8,'10"':10,'12"':12,'14"':14,'16"':16,'18"':18,'20"':20,'22"':22,'24"':24};
+const NPS_NOMINAL_IN = {'1/8"':0.125,'1/4"':0.25,'3/8"':0.375,'1/2"':0.5,'3/4"':0.75,'1"':1,'1-1/4"':1.25,'1-1/2"':1.5,'2"':2,'2-1/2"':2.5,'3"':3,'3-1/2"':3.5,'4"':4,'5"':5,'6"':6,'8"':8,'10"':10,'12"':12,'14"':14,'16"':16,'18"':18,'20"':20,'22"':22,'24"':24,'26"':26,'28"':28,'30"':30,'32"':32,'34"':34,'36"':36,'42"':42,'48"':48};
 const PIPE_NPS_OPTIONS = PIPE_SIZES[40].map(p => p.nps);
 const PIPE_MATERIAL_OPTIONS = [
   {value:0.0015, label:'Drawn tubing (0.0015 mm)'}, {value:0.045, label:'Commercial steel (0.045 mm)'},
@@ -184,14 +184,60 @@ const PALETTE_GROUPS = [
   {label:'Instrumentation', ids:['valve','orifice','flowtx']},
   {label:'Piping', ids:['reducer','enlarger','branch','point']}
 ];
-const lineFields = [
-  {k:'schedule', l:'Pipe schedule', select: SCHEDULE_OPTIONS},
-  {k:'nps', l:'Pipe size (NPS)', select: PIPE_NPS_OPTIONS},
+const lineFieldsPre = [
+  {k:'schedule', l:'Pipe schedule', select: SCHEDULE_OPTIONS}
+];
+const lineFieldsPost = [
   {k:'roughness', l:'Pipe material / roughness', select: PIPE_MATERIAL_OPTIONS},
   {k:'length', l:'Length (m)', num:true}
 ];
+const lineFields = lineFieldsPre.concat([{k:'nps', l:'Pipe size (NPS)', select: PIPE_NPS_OPTIONS}], lineFieldsPost);
 const lineFlowField = {k:'flow', l:'Flow (m3/h)', num:true};
 const LINE_COMPLETE_FIELDS = lineFields.concat([lineFlowField]);
+
+// Picks the smallest NPS (in the given schedule) whose actual internal
+// diameter keeps velocity at or below the target — used by the "size by
+// velocity" mode as an alternative to manually choosing a pipe size.
+function pickNpsByVelocity(schedule, flowM3h, maxVelocity) {
+  const table = PIPE_SIZES[schedule] || PIPE_SIZES[40];
+  const Qm3s = flowM3h / 3600;
+  for (let i = 0; i < table.length; i++) {
+    const idM = table[i].d / 1000;
+    const area = Math.PI * idM * idM / 4;
+    const v = Qm3s / area;
+    if (v <= maxVelocity) return {nps: table[i].nps, velocity: v};
+  }
+  const last = table[table.length - 1];
+  const idM = last.d / 1000;
+  const v = Qm3s / (Math.PI * idM * idM / 4);
+  return {nps: last.nps, velocity: v, oversized: true};
+}
+
+function sizeModeBlockHtml(line) {
+  const mode = line.data.sizeMode || 'manual';
+  let html = '<div style="margin:10px 0; padding:10px; border:1px solid var(--border); border-radius:var(--r-sm);">';
+  html += '<label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:6px;">Pipe size</label>';
+  html += '<select class="size-mode-select" style="width:100%; margin-bottom:8px;">' +
+    '<option value="manual"' + (mode==='manual'?' selected':'') + '>Choose NPS manually</option>' +
+    '<option value="byVelocity"' + (mode==='byVelocity'?' selected':'') + '>Size by max velocity</option>' +
+    '</select>';
+  if (mode === 'manual') {
+    html += buildFieldsHtml([{k:'nps', l:'Pipe size (NPS)', select: PIPE_NPS_OPTIONS}], line.data, 'spec-field');
+  } else {
+    html += buildFieldsHtml([{k:'maxVelocity', l:'Max allowable velocity (m/s)', num:true}], line.data, 'spec-field');
+    const flowVal = parseFloat(line.data.flow);
+    const maxV = parseFloat(line.data.maxVelocity);
+    if (flowVal && maxV) {
+      const picked = pickNpsByVelocity(line.data.schedule || '40', flowVal, maxV);
+      line.data.nps = picked.nps;
+      html += '<p style="font-size:11px; color:var(--text-muted); margin:6px 0 0;">Picked size: <b style="color:var(--text-accent);">' + picked.nps + '</b> \u2014 actual velocity ' + picked.velocity.toFixed(2) + ' m/s' + (picked.oversized ? ' (largest available size still exceeds target)' : '') + '</p>';
+    } else {
+      html += '<p style="font-size:11px; color:var(--text-muted); margin:6px 0 0;">Enter flow and a target velocity to auto-pick a size.</p>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
 
 const FT_TABLE = [
   {size:0.5, ft:.027},{size:0.75, ft:.025},{size:1, ft:.023},{size:1.25, ft:.022},{size:1.5, ft:.021},
@@ -447,7 +493,9 @@ function buildFieldsHtml(fields, dataObj, cls, narrow) {
         f.select.map(o => {
           const val = (o && typeof o === 'object') ? o.value : o;
           const lbl = (o && typeof o === 'object') ? o.label : o;
-          return '<option value="'+val+'"'+(String(dataObj[f.k])===String(val)?' selected':'')+'>'+lbl+'</option>';
+          const valEsc = String(val).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+          const lblEsc = String(lbl).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+          return '<option value="'+valEsc+'"'+(String(dataObj[f.k])===String(val)?' selected':'')+'>'+lblEsc+'</option>';
         }).join('') + '</select>';
     } else {
       html += '<input type="' + (f.num ? 'number' : 'text') + '" ' + (f.num ? 'step="0.1"' : '') + ' class="' + cls + '" data-key="' + f.k + '" value="' + (dataObj[f.k] || '') + '" style="width:100%;">';
@@ -638,6 +686,32 @@ function computeTransitionDp(node, idx) {
   return {ok:true, dpBar};
 }
 
+// Keeps Flow in sync across suction line(s), the pump, and discharge line(s),
+// since it's physically the same flow along one continuous path. Propagation
+// stops at a Branch/Tee node in either direction, since flow can split there.
+function propagateFlow(value, originNodeIdx, originLineIdx) {
+  const total = nodes.length;
+  const originPos = (originLineIdx != null) ? originLineIdx * 2 + 1 : originNodeIdx * 2;
+  for (let pos = originPos - 1; pos >= 0; pos--) {
+    if (pos % 2 === 0) {
+      const nd = nodes[pos / 2];
+      if (nd.type === 'branch') break;
+      if (nd.type === 'pump') nd.data.flow = value;
+    } else {
+      lines[(pos - 1) / 2].data.flow = value;
+    }
+  }
+  for (let pos = originPos + 1; pos < total * 2 - 1; pos++) {
+    if (pos % 2 === 0) {
+      const nd = nodes[pos / 2];
+      if (nd.type === 'branch') break;
+      if (nd.type === 'pump') nd.data.flow = value;
+    } else {
+      lines[(pos - 1) / 2].data.flow = value;
+    }
+  }
+}
+
 function showNodeForm(node, idx) {
   const def = equipDefs[node.type];
   const fields = effectiveFields(def, idx);
@@ -654,7 +728,12 @@ function showNodeForm(node, idx) {
     inp.oninput = fn; inp.onchange = fn;
   });
   formPanel.querySelectorAll('.spec-field').forEach(inp => {
-    const fn = () => { node.data[inp.dataset.key] = inp.value; render(); if (def.isTransition) updateTransitionResults(node, idx); };
+    const fn = () => {
+      node.data[inp.dataset.key] = inp.value;
+      if (inp.dataset.key === 'flow' && node.type === 'pump') propagateFlow(inp.value, idx, null);
+      render();
+      if (def.isTransition) updateTransitionResults(node, idx);
+    };
     inp.oninput = fn; inp.onchange = fn;
   });
   if (!def.isBranch && !def.isTransition) attachFluidListeners(zoneIdx);
@@ -665,7 +744,9 @@ function showLineForm(line, idx) {
   formPanel.style.display = 'block';
   let html = buildFieldsHtml([{k:'tag', l:'Line Number'}], line.tag, 'tag-field', true);
   html += processBlockHtml(zoneIdx, line);
-  html += buildFieldsHtml(lineFields, line.data, 'spec-field');
+  html += buildFieldsHtml(lineFieldsPre, line.data, 'spec-field');
+  html += sizeModeBlockHtml(line);
+  html += buildFieldsHtml(lineFieldsPost, line.data, 'spec-field');
   html += buildFittingsHtml(line.fittings);
   html += resultsHtml(line, getZone(zoneIdx));
   formPanel.innerHTML = html;
@@ -675,9 +756,20 @@ function showLineForm(line, idx) {
     inp.oninput = fn; inp.onchange = fn;
   });
   formPanel.querySelectorAll('.spec-field').forEach(inp => {
-    const fn = () => { line.data[inp.dataset.key] = inp.value; render(); updateResults(line, zoneIdx); };
+    const fn = () => {
+      line.data[inp.dataset.key] = inp.value;
+      if (inp.dataset.key === 'flow') propagateFlow(inp.value, null, idx);
+      if (line.data.sizeMode === 'byVelocity' && ['schedule','maxVelocity','flow'].includes(inp.dataset.key)) {
+        showLineForm(line, idx);
+        return;
+      }
+      render();
+      updateResults(line, zoneIdx);
+    };
     inp.oninput = fn; inp.onchange = fn;
   });
+  const modeSel = formPanel.querySelector('.size-mode-select');
+  if (modeSel) modeSel.onchange = () => { line.data.sizeMode = modeSel.value; showLineForm(line, idx); render(); };
   attachFluidListeners(zoneIdx, () => updateResults(line, zoneIdx));
   formPanel.querySelectorAll('.fitting-type').forEach(sel => {
     sel.onchange = () => { line.fittings[parseInt(sel.dataset.fidx)].type = sel.value; updateResults(line, zoneIdx); };
