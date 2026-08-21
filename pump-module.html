@@ -79,6 +79,8 @@
 
 <div id="palette" style="display:flex; flex-direction:column; gap:10px; margin-bottom:1.5rem;"></div>
 
+<div id="fluid-zones-panel" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:1.25rem;"></div>
+
 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
   <span style="font-size:13px; color:var(--text-secondary);">Equipment sequence (click an item or line)</span>
   <button id="reset-btn" style="font-size:13px; padding:6px 12px;">&#8635; Clear</button>
@@ -134,50 +136,61 @@ const FLUID_FIELDS = [
   {k:'density', l:'Density (kg/m3)', num:true}, {k:'viscosity', l:'Viscosity (cP)', num:true},
   {k:'vapor', l:'Vapor pressure (bara)', num:true}
 ];
+// Generic role-based field sets, applied to "vessel-type" equipment
+// (Tank / Tower / Misc) depending on where it sits in the sequence: source
+// (suction boundary), destination (discharge boundary), or intermediate
+// (mid-path). Exchanger always uses the intermediate set since it can never
+// be a boundary node.
+const sourceRoleFields = [commonField,
+  {k:'nozzle_elev_out', l:'Outlet nozzle elevation above equipment base (m)'},
+  {k:'hhll', l:'HHLL (m)'}, {k:'llll', l:'LLLL (m)'},
+  {k:'opress', l:'Operating pressure (bar)'}, {k:'despress', l:'Design pressure (bar)'}
+];
+const destRoleFields = [commonField,
+  {k:'nozzle_elev_in', l:'Inlet nozzle elevation above equipment base (m)'},
+  {k:'opress', l:'Operating pressure (bar)'}
+];
+const midRoleFields = [commonField,
+  {k:'nozzle_elev_in', l:'Inlet nozzle elevation above equipment base (m)'},
+  {k:'nozzle_elev_out', l:'Outlet nozzle elevation above equipment base (m)'},
+  {k:'dp', l:'Pressure Drop (bar)'}
+];
 const equipDefs = {
-  tank: {label:'Tank', fields:[commonField,
-    {k:'hhll', l:'HHLL (m)'}, {k:'hll', l:'HLL (m)'}, {k:'nll', l:'NLL (m)'}, {k:'lll', l:'LLL (m)'}, {k:'llll', l:'LLLL (m)'},
-    {k:'opress', l:'Operating pressure (bar)'}, {k:'despress', l:'Design pressure (bar)'},
-    {k:'nozzle_elev', l:'Inlet nozzle elevation above equipment base (m)'}
-  ]},
+  tank: {label:'Tank', roleFields:true},
   pump: {label:'Pump', fields:[commonField,
     {k:'flow', l:'Flow (m3/h)'},
+    {k:'suction_nozzle_elev', l:'Suction nozzle center elevation above pump base (m)'},
     {k:'npshr', l:'NPSH required (m)'}, {k:'effp', l:'Pump efficiency (%)'}, {k:'effm', l:'Motor efficiency (%)'}
   ]},
-  valve: {label:'Control valve', fields:[commonField,
-    {k:'size', l:'Size (in)'}, {k:'dp', l:'Pressure drop (bar)'}
+  valve: {label:'Control valve', fields:[
+    {k:'dp', l:'Pressure drop (bar)'}
   ]},
-  exchanger: {label:'Exchanger', fields:[commonField,
-    {k:'tin', l:'Inlet temp (°C)'}, {k:'tout', l:'Outlet temp (°C)'}
-  ]},
+  exchanger: {label:'Exchanger', fields: midRoleFields},
   point: {label:'High point', fields:[commonField,
     {k:'note', l:'Description (e.g. pipe rack, vent)'}
   ]},
-  tower: {label:'Tower', fields:[commonField,
-    {k:'opress', l:'Operating pressure (bar)'},
-    {k:'nozzle_elev', l:'Inlet nozzle elevation above equipment base (m)'}
-  ]},
+  tower: {label:'Tower', roleFields:true},
   filter: {label:'Filter', fields:[commonField,
     {k:'dp', l:'Pressure drop (bar)'}
   ]},
-  misc: {label:'Miscellaneous', fields:[commonField,
-    {k:'desc', l:'Description'}, {k:'dp', l:'Pressure drop (bar)'}, {k:'opress', l:'Operating pressure (bar)'}
-  ]},
-  orifice: {label:'Orifice', fields:[commonField,
+  misc: {label:'Miscellaneous', roleFields:true, extraFields:[{k:'desc', l:'Description'}]},
+  orifice: {label:'Orifice', fields:[
     {k:'dp', l:'Pressure drop (bar)'}
   ]},
-  flowtx: {label:'Flow Transmitter', fields:[commonField]},
-  reducer: {label:'Reducer (large\u2192small)', fields:[commonField,
+  flowtx: {label:'Flow Transmitter', fields:[
+    {k:'dp', l:'Pressure drop (bar)'}
+  ]},
+  reducer: {label:'Reducer (large\u2192small)', fields:[
     {k:'transition', l:'Transition type', select:['Sudden','Gradual']}
-  ], isTransition:true},
-  enlarger: {label:'Enlarger (small\u2192large)', fields:[commonField,
+  ], isTransition:true, noTag:true},
+  enlarger: {label:'Enlarger (small\u2192large)', fields:[
     {k:'transition', l:'Transition type', select:['Sudden','Gradual']}
-  ], isTransition:true},
-  branch: {label:'Tee', fields:[commonField,
+  ], isTransition:true, noTag:true},
+  branch: {label:'Tee', fields:[
     {k:'to', l:'To equipment tag'}
   ], isBranch:true}
 };
-const EQUIP_DP_TYPES = ['valve','orifice','filter','misc'];
+const EQUIP_DP_TYPES = ['valve','orifice','filter','misc','exchanger'];
 const STARTER_IDS = ['tank','tower','misc'];
 const PALETTE_GROUPS = [
   {label:'Equipment', ids:['tank','exchanger','tower','pump','filter','misc']},
@@ -340,19 +353,12 @@ function isComplete(fields, dataObj) {
 function effectiveFields(def, idx) {
   const isStartBoundary = idx === 0;
   const isEndBoundary = idx === nodes.length - 1;
-  let fields = def.fields;
-  // The destination-only "inlet nozzle elevation above equipment base" field
-  // only applies when this tank/tower sits at the end of the sequence (the
-  // discharge destination) — not when it's the starting/suction vessel. It is
-  // added on top of the equipment's own installation elevation, not a
-  // replacement for it.
-  if (isStartBoundary) fields = fields.filter(f => f.k !== 'nozzle_elev');
-  // Miscellaneous can act either as a generic in-line device (Pressure drop) or
-  // as a generic known-pressure boundary (Operating pressure) at the start/end
-  // of the sequence — only show the field relevant to the position it's in.
-  if (def === equipDefs.misc) {
-    const isBoundary = isStartBoundary || isEndBoundary;
-    fields = fields.filter(f => isBoundary ? f.k !== 'dp' : f.k !== 'opress');
+  let fields;
+  if (def.roleFields) {
+    fields = isStartBoundary ? sourceRoleFields : isEndBoundary ? destRoleFields : midRoleFields;
+    if (def.extraFields) fields = fields.concat(def.extraFields);
+  } else {
+    fields = def.fields;
   }
   return fields;
 }
@@ -395,6 +401,7 @@ function badgeMarkup(complete, color) {
 }
 
 function render() {
+  renderFluidZonesPanel();
   const spacing = 150, marginX = 130, baseY = 220, scale = 7, maxOff = 110;
   const n = nodes.length;
   const svgWidth = Math.max(480, marginX + 60 + (n-1)*spacing);
@@ -522,29 +529,36 @@ function buildFittingsHtml(fittings) {
   return html;
 }
 
-function fluidBlockHtml(zoneIdx) {
-  const zoneData = getZone(zoneIdx);
-  let html = '<div style="margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border);">';
-  html += '<p style="font-size:12px; color:var(--text-muted); margin:0 0 8px;">Fluid properties \u2014 zone ' + (zoneIdx+1) + (zoneIdx>0 ? ' (after exchanger)' : '') + '</p>';
-  html += buildFieldsHtml(FLUID_FIELDS, zoneData, 'fluid-field');
-  html += '</div>';
-  return html;
+function totalZoneCount() {
+  return exchangerCountUpTo(nodes.length ? nodes.length - 1 : 0) + 1;
+}
+function renderFluidZonesPanel() {
+  const panel = document.getElementById('fluid-zones-panel');
+  if (!panel) return;
+  const zoneCount = totalZoneCount();
+  let html = '';
+  for (let z = 0; z < zoneCount; z++) {
+    const zoneData = getZone(z);
+    html += '<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-sm); padding:12px 14px; min-width:220px; flex:1;">';
+    html += '<p style="font-size:12px; font-weight:600; color:var(--text-secondary); margin:0 0 8px;">Fluid properties \u2014 zone ' + (z + 1) + (z > 0 ? ' (after exchanger)' : '') + '</p>';
+    html += buildFieldsHtml(FLUID_FIELDS, zoneData, 'fluid-zone-field-' + z);
+    html += '</div>';
+  }
+  panel.innerHTML = html;
+  for (let z = 0; z < zoneCount; z++) {
+    const zoneData = getZone(z);
+    panel.querySelectorAll('.fluid-zone-field-' + z).forEach(inp => {
+      const fn = () => {
+        zoneData[inp.dataset.key] = inp.value;
+        if (openLineForm && openLineForm.zoneIdx === z) updateResults(openLineForm.line, z);
+      };
+      inp.oninput = fn; inp.onchange = fn;
+    });
+  }
 }
 function processBlockHtml(zoneIdx, line) {
-  const zoneData = getZone(zoneIdx);
-  let html = '<div style="margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border);">';
-  html += '<p style="font-size:12px; color:var(--text-muted); margin:0 0 8px;">Fluid properties \u2014 zone ' + (zoneIdx+1) + (zoneIdx>0 ? ' (after exchanger)' : '') + '</p>';
-  html += buildFieldsHtml(FLUID_FIELDS, zoneData, 'fluid-field');
-  html += '<div style="margin-top:10px;">' + buildFieldsHtml([lineFlowField], line.data, 'spec-field') + '</div>';
-  html += '</div>';
-  return html;
-}
-function attachFluidListeners(zoneIdx, extraCb) {
-  const zoneData = getZone(zoneIdx);
-  formPanel.querySelectorAll('.fluid-field').forEach(inp => {
-    const fn = () => { zoneData[inp.dataset.key] = inp.value; if (extraCb) extraCb(); };
-    inp.oninput = fn; inp.onchange = fn;
-  });
+  return '<div style="margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border);">' +
+    buildFieldsHtml([lineFlowField], line.data, 'spec-field') + '</div>';
 }
 
 function computeLineResult(line, zoneData) {
@@ -713,12 +727,12 @@ function propagateFlow(value, originNodeIdx, originLineIdx) {
 }
 
 function showNodeForm(node, idx) {
+  openLineForm = null;
   const def = equipDefs[node.type];
   const fields = effectiveFields(def, idx);
   const zoneIdx = nodeZone(idx);
   formPanel.style.display = 'block';
-  let html = buildFieldsHtml([{k:'tag', l:'Equipment Tag Number'}], node.tag, 'tag-field', true);
-  if (!def.isBranch && !def.isTransition) html += fluidBlockHtml(zoneIdx);
+  let html = def.noTag ? '' : buildFieldsHtml([{k:'tag', l:'Tag Number'}], node.tag, 'tag-field', true);
   html += buildFieldsHtml(fields, node.data, 'spec-field');
   if (def.isTransition) html += transitionResultsHtml(node, idx);
   formPanel.innerHTML = html;
@@ -736,11 +750,12 @@ function showNodeForm(node, idx) {
     };
     inp.oninput = fn; inp.onchange = fn;
   });
-  if (!def.isBranch && !def.isTransition) attachFluidListeners(zoneIdx);
 }
 
+let openLineForm = null;
 function showLineForm(line, idx) {
   const zoneIdx = lineZone(idx);
+  openLineForm = {line, idx, zoneIdx};
   formPanel.style.display = 'block';
   let html = buildFieldsHtml([{k:'tag', l:'Line Number'}], line.tag, 'tag-field', true);
   html += processBlockHtml(zoneIdx, line);
@@ -770,7 +785,6 @@ function showLineForm(line, idx) {
   });
   const modeSel = formPanel.querySelector('.size-mode-select');
   if (modeSel) modeSel.onchange = () => { line.data.sizeMode = modeSel.value; showLineForm(line, idx); render(); };
-  attachFluidListeners(zoneIdx, () => updateResults(line, zoneIdx));
   formPanel.querySelectorAll('.fitting-type').forEach(sel => {
     sel.onchange = () => { line.fittings[parseInt(sel.dataset.fidx)].type = sel.value; updateResults(line, zoneIdx); };
   });
@@ -792,6 +806,9 @@ function showLineForm(line, idx) {
 let formPanelInteractionStarted = false;
 formPanel.addEventListener('mousedown', () => { formPanelInteractionStarted = true; });
 formPanel.addEventListener('touchstart', () => { formPanelInteractionStarted = true; });
+const fluidZonesPanelEl = document.getElementById('fluid-zones-panel');
+fluidZonesPanelEl.addEventListener('mousedown', () => { formPanelInteractionStarted = true; });
+fluidZonesPanelEl.addEventListener('touchstart', () => { formPanelInteractionStarted = true; });
 
 document.addEventListener('click', (e) => {
   if (formPanelInteractionStarted) { formPanelInteractionStarted = false; return; }
@@ -870,9 +887,25 @@ function computeSummary() {
 
   const g = 9.81;
   const elevPump = parseFloat(pumpNode.data.elevation) || 0;
+  const suctionNozzleOffset = (pumpNode.data.suction_nozzle_elev !== undefined && pumpNode.data.suction_nozzle_elev !== '') ? parseFloat(pumpNode.data.suction_nozzle_elev) : 0;
+  const elevPumpSuctionNozzle = elevPump + suctionNozzleOffset;
   const elevStart = parseFloat(startNode.data.elevation) || 0;
-  const endNozzleOffset = (endNode.data.nozzle_elev !== undefined && endNode.data.nozzle_elev !== '') ? parseFloat(endNode.data.nozzle_elev) : 0;
-  const elevEndNozzle = (parseFloat(endNode.data.elevation) || 0) + endNozzleOffset;
+  const endNozzleOffset = (endNode.data.nozzle_elev_in !== undefined && endNode.data.nozzle_elev_in !== '') ? parseFloat(endNode.data.nozzle_elev_in) : 0;
+  const destNozzleElev = (parseFloat(endNode.data.elevation) || 0) + endNozzleOffset;
+  // Conservative/standard practice: if a High Point along the discharge path
+  // (e.g. a pipe rack the line crosses) sits above the destination nozzle,
+  // the pump must be sized to reach that higher point instead — a full
+  // liquid-filled pipe's TOTAL static head only depends on the two
+  // endpoints, but designing to the highest point avoids any risk of vapor
+  // lock/column separation at that point without needing a separate
+  // pressure-profile check.
+  let elevEndNozzle = destNozzleElev;
+  for (let i = pumpIdx + 1; i < nodes.length; i++) {
+    if (nodes[i].type === 'point') {
+      const hp = parseFloat(nodes[i].data.elevation);
+      if (!isNaN(hp) && hp > elevEndNozzle) elevEndNozzle = hp;
+    }
+  }
   const llll = (startNode.data.llll !== undefined && startNode.data.llll !== '') ? parseFloat(startNode.data.llll) : elevStart;
   const hhll = (startNode.data.hhll !== undefined && startNode.data.hhll !== '') ? parseFloat(startNode.data.hhll) : elevStart;
 
@@ -883,7 +916,7 @@ function computeSummary() {
     return {ok:false, msg:'Set Operating pressure on both the first and last equipment (Tank/Tower) to compute the summary.'};
   }
 
-  const staticHeadSuction = llll - elevPump;
+  const staticHeadSuction = llll - elevPumpSuctionNozzle;
   const staticHeadDischarge = elevEndNozzle - elevPump;
 
   const suctionPress = suctionOpPress + (sucRho*g*staticHeadSuction)/1e5 - sucDp;
@@ -893,7 +926,7 @@ function computeSummary() {
   const tdh = (pumpDpCalc * 1e5) / (sucRho * g);
 
   const suctionDesignForMax = !isNaN(suctionDesPress) ? suctionDesPress : suctionOpPress;
-  const maxSuctionHeadM = hhll - elevPump;
+  const maxSuctionHeadM = hhll - elevPumpSuctionNozzle;
   const maxSuctionPressure = (sucRho*g*maxSuctionHeadM)/1e5 + suctionDesignForMax;
   const shutoffPressure = maxSuctionPressure + pumpDpCalc;
 
@@ -916,7 +949,8 @@ function computeSummary() {
 
   return {ok:true, sucLineDp, sucEquipDp, sucDp, disLineDp, disEquipDp, disDp, suctionPress, dischargePress,
     pumpDpCalc, maxSuctionPressure, shutoffPressure, tdh, npsha, npshr, npshMargin,
-    hydraulicPower, bhp, absorbedPower, staticHeadSuction, staticHeadDischarge};
+    hydraulicPower, bhp, absorbedPower, staticHeadSuction, staticHeadDischarge,
+    governingDischargeElev: elevEndNozzle, destNozzleElev, highPointGoverns: elevEndNozzle > destNozzleElev};
 }
 
 function fmt(v, d) { return (v===null || v===undefined || isNaN(v)) ? '\u2014' : v.toFixed(d===undefined?2:d); }
@@ -1045,7 +1079,7 @@ function buildReportHtml() {
   const startNode = nodes[0], endNode = nodes[nodes.length-1], pumpNode = nodes[pumpIdx];
   const sucZone = getZone(nodeZone(pumpIdx));
   const disZone = getZone(nodeZone(nodes.length - 1));
-  const endNozzleOffsetR = (endNode.data.nozzle_elev !== undefined && endNode.data.nozzle_elev !== '') ? parseFloat(endNode.data.nozzle_elev) : 0;
+  const endNozzleOffsetR = (endNode.data.nozzle_elev_in !== undefined && endNode.data.nozzle_elev_in !== '') ? parseFloat(endNode.data.nozzle_elev_in) : 0;
   const endElev = (parseFloat(endNode.data.elevation) || 0) + endNozzleOffsetR;
 
   html += '<div class="rpt-section-title">1. BASIC DATA</div><table>';
@@ -1060,9 +1094,13 @@ function buildReportHtml() {
   html += '<tr><td>Tag</td><td>' + vTag(startNode) + '</td><td>' + vTag(endNode) + '</td></tr>';
   html += '<tr><td>Type</td><td>' + equipDefs[startNode.type].label + '</td><td>' + equipDefs[endNode.type].label + '</td></tr>';
   html += '<tr><td>Installation Elevation (m)</td><td>' + fmtR(parseFloat(startNode.data.elevation),2) + '</td><td>' + fmtR(parseFloat(endNode.data.elevation),2) + '</td></tr>';
-  html += '<tr><td>Nozzle Elevation Above Base (m)</td><td>\u2014</td><td>' + fmtR(endNozzleOffsetR,2) + '</td></tr>';
+  const startNozzleOffsetR = (startNode.data.nozzle_elev_out !== undefined && startNode.data.nozzle_elev_out !== '') ? parseFloat(startNode.data.nozzle_elev_out) : null;
+  html += '<tr><td>Nozzle Elevation Above Base (m)</td><td>' + (startNozzleOffsetR!==null ? fmtR(startNozzleOffsetR,2) : '\u2014') + '</td><td>' + fmtR(endNozzleOffsetR,2) + '</td></tr>';
   html += '<tr><td>Effective Inlet Nozzle Elevation (m)</td><td>\u2014</td><td>' + fmtR(parseFloat(endElev),2) + '</td></tr>';
-  ['hhll','hll','nll','lll','llll'].forEach(k => {
+  if (r.highPointGoverns) {
+    html += '<tr><td colspan="4" style="color:#9C3A32;"><b>Note:</b> A High Point along the discharge path (' + fmtR(r.governingDischargeElev,2) + ' m) is higher than the destination nozzle \u2014 the pump was sized to reach that elevation instead (conservative practice).</td></tr>';
+  }
+  ['hhll','llll'].forEach(k => {
     const sv = startNode.data[k], ev = endNode.data[k];
     if (sv === undefined && ev === undefined) return;
     html += '<tr><td>' + k.toUpperCase() + ' (m)</td><td>' + (sv!==undefined && sv!=='' ? fmtR(parseFloat(sv),2) : '\u2014') + '</td><td>' + (ev!==undefined && ev!=='' ? fmtR(parseFloat(ev),2) : '\u2014') + '</td></tr>';
@@ -1089,6 +1127,7 @@ function buildReportHtml() {
 
   html += '<div class="rpt-section-title">4. HYDRAULIC RESULTS</div><table>';
   html += '<tr><td>Height of Pump Centerline</td><td>' + fmtR(parseFloat(pumpNode.data.elevation),2) + ' m</td><td>Discharge Pressure at QD</td><td>' + fmtR(r.dischargePress,3) + ' bar(a)</td></tr>';
+  html += '<tr><td>Suction Nozzle Elevation Above Base</td><td>' + (pumpNode.data.suction_nozzle_elev!==undefined && pumpNode.data.suction_nozzle_elev!=='' ? fmtR(parseFloat(pumpNode.data.suction_nozzle_elev),2)+' m' : '\u2014') + '</td><td>&nbsp;</td><td>&nbsp;</td></tr>';
   html += '<tr><td>Suction Pressure at Pump</td><td>' + fmtR(r.suctionPress,3) + ' bar(a)</td><td>Pump Shut-off / Design Pressure</td><td>' + fmtR(r.shutoffPressure,3) + ' bar(a)</td></tr>';
   html += '<tr><td>NPSH Available</td><td>' + fmtR(r.npsha,2) + ' m</td><td>NPSH Required</td><td>' + fmtR(r.npshr,2) + ' m</td></tr>';
   html += '</table>';
