@@ -52,6 +52,9 @@
     color: var(--text-primary);
   }
   input:focus, select:focus { outline: none; border-color: var(--text-accent); }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   h1 {
     font-size: 13px; font-weight: 700; letter-spacing: .5px; margin: 0 0 4px;
     text-transform: uppercase; color: var(--text-secondary);
@@ -74,7 +77,10 @@
 </head>
 <body>
 <div class="app-shell">
-  <h1>Pump Hydraulic Calc.</h1>
+  <div style="display:flex; align-items:baseline; gap:14px; padding:10px 0 8px; border-bottom:1px solid var(--border); margin-bottom:12px;">
+    <div style="font-size:12px; font-weight:700; color:var(--text-accent); background:rgba(11,95,165,.08); padding:3px 9px; border-radius:var(--r-sm); letter-spacing:1px;">SEZTools</div>
+    <div style="font-size:14px; font-weight:600; color:var(--text-primary);">Pump Hydraulic Calc.</div>
+  </div>
   <p class="subtitle">Crane TP-410 based K-factor / Darcy-Weisbach line loss calc, per-zone fluid properties, and a final suction/discharge/NPSH/power summary.</p>
 
 <div id="palette" style="display:flex; flex-direction:column; gap:10px; margin-bottom:1.5rem;"></div>
@@ -90,18 +96,12 @@
 
 <div id="form-panel" style="display:none; margin-top:1rem; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:1rem 1.25rem;"></div>
 
-<div style="margin-top:1.5rem; background:var(--surface-1); border-radius:8px; padding:0.9rem 1rem;">
-  <p style="font-size:12px; color:var(--text-muted); margin:0 0 8px;">Report header (used on the exported PDF)</p>
-  <div id="report-info-fields" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px;"></div>
-</div>
-
 <div id="calc-status" style="margin-top:1.5rem; font-size:13px; padding:10px 14px; border-radius:8px;"></div>
 
 <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
   <button id="pdf-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);">Export PDF</button>
-  <button id="summary-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);">Show Summary</button>
 </div>
-<div id="summary-panel" style="display:none; margin-top:1rem; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:1.25rem;"></div>
+<div id="summary-panel" style="margin-top:1rem; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:1.25rem;"></div>
 <div id="print-report"></div>
 </div>
 
@@ -228,16 +228,16 @@ function pickNpsByVelocity(schedule, flowM3h, maxVelocity) {
 
 function sizeModeBlockHtml(line) {
   const mode = line.data.sizeMode || 'manual';
-  let html = '<div style="margin:10px 0; padding:10px; border:1px solid var(--border); border-radius:var(--r-sm);">';
+  let html = '<div style="margin:10px 0; padding:10px; border:1px solid var(--border); border-radius:var(--r-sm); max-width:260px;">';
   html += '<label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:6px;">Pipe size</label>';
   html += '<select class="size-mode-select" style="width:100%; margin-bottom:8px;">' +
     '<option value="manual"' + (mode==='manual'?' selected':'') + '>Choose NPS manually</option>' +
     '<option value="byVelocity"' + (mode==='byVelocity'?' selected':'') + '>Size by max velocity</option>' +
     '</select>';
   if (mode === 'manual') {
-    html += buildFieldsHtml([{k:'nps', l:'Pipe size (NPS)', select: PIPE_NPS_OPTIONS}], line.data, 'spec-field');
+    html += buildFieldsHtml([{k:'nps', l:'Pipe size (NPS)', select: PIPE_NPS_OPTIONS}], line.data, 'spec-field', true);
   } else {
-    html += buildFieldsHtml([{k:'maxVelocity', l:'Max allowable velocity (m/s)', num:true}], line.data, 'spec-field');
+    html += buildFieldsHtml([{k:'maxVelocity', l:'Max allowable velocity (m/s)', num:true}], line.data, 'spec-field', true);
     const flowVal = parseFloat(line.data.flow);
     const maxV = parseFloat(line.data.maxVelocity);
     if (flowVal && maxV) {
@@ -296,19 +296,9 @@ let fluidZones = {};
 let nextId = 1;
 const paletteButtons = {};
 
-const REPORT_INFO_FIELDS = [
-  {k:'client', l:'Client'}, {k:'plant', l:'Plant'}, {k:'project', l:'Project'},
-  {k:'docNo', l:'Docum. No.'}, {k:'sheet', l:'Sheet'}, {k:'rev', l:'Rev.'}, {k:'item', l:'Item'}
-];
+// Report header fields (Client/Plant/Project/etc.) are no longer entered via
+// the UI, but the PDF report still reads reportInfo.* — they'll just be blank.
 let reportInfo = {};
-const reportInfoWrap = document.getElementById('report-info-fields');
-reportInfoWrap.innerHTML = REPORT_INFO_FIELDS.map(f =>
-  '<div><label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">'+f.l+'</label>' +
-  '<input type="text" data-key="'+f.k+'" style="width:100%;"></div>'
-).join('');
-reportInfoWrap.querySelectorAll('input').forEach(inp => {
-  inp.oninput = () => { reportInfo[inp.dataset.key] = inp.value; };
-});
 
 const palette = document.getElementById('palette');
 PALETTE_GROUPS.forEach(group => {
@@ -402,6 +392,7 @@ function badgeMarkup(complete, color) {
 
 function render() {
   renderFluidZonesPanel();
+  summaryPanel.innerHTML = summaryHtml();
   const spacing = 150, marginX = 130, baseY = 220, scale = 7, maxOff = 110;
   const n = nodes.length;
   const svgWidth = Math.max(480, marginX + 60 + (n-1)*spacing);
@@ -481,7 +472,7 @@ function updateCalcStatus() {
     statusEl.style.background = 'rgba(55,138,221,0.08)';
     statusEl.style.border = '1px solid rgba(55,138,221,0.3)';
     statusEl.style.color = BLUE;
-    statusEl.innerHTML = '\u2713 Calculation complete \u2014 TDH ' + r.tdh.toFixed(1) + ' m, NPSH margin ' + r.npshMargin.toFixed(2) + ' m. Use Show Summary or Export PDF for full results.';
+    statusEl.innerHTML = '\u2713 Calculation complete \u2014 TDH ' + r.tdh.toFixed(1) + ' m, NPSH margin ' + r.npshMargin.toFixed(2) + ' m. See Summary below or Export PDF for full results.';
   } else {
     statusEl.style.background = 'rgba(201,130,10,0.08)';
     statusEl.style.border = '1px solid rgba(201,130,10,0.3)';
@@ -491,7 +482,7 @@ function updateCalcStatus() {
 }
 
 function buildFieldsHtml(fields, dataObj, cls, narrow) {
-  const gridCols = narrow ? 'repeat(auto-fit, minmax(160px, 260px))' : 'repeat(auto-fit, minmax(160px, 1fr))';
+  const gridCols = narrow ? 'repeat(auto-fit, minmax(160px, 260px))' : 'repeat(auto-fit, minmax(170px, 230px))';
   let html = '<div style="display:grid; grid-template-columns:'+gridCols+'; gap:10px;">';
   fields.forEach(f => {
     html += '<div><label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px;">' + f.l + '</label>';
@@ -551,6 +542,7 @@ function renderFluidZonesPanel() {
       const fn = () => {
         zoneData[inp.dataset.key] = inp.value;
         if (openLineForm && openLineForm.zoneIdx === z) updateResults(openLineForm.line, z);
+        summaryPanel.innerHTML = summaryHtml();
       };
       inp.oninput = fn; inp.onchange = fn;
     });
@@ -812,14 +804,14 @@ fluidZonesPanelEl.addEventListener('touchstart', () => { formPanelInteractionSta
 
 document.addEventListener('click', (e) => {
   if (formPanelInteractionStarted) { formPanelInteractionStarted = false; return; }
-  if (formPanel.style.display === 'block' && !formPanel.contains(e.target) && !summaryPanel.contains(e.target) && e.target.id !== 'summary-btn') {
+  if (formPanel.style.display === 'block' && !formPanel.contains(e.target) && !summaryPanel.contains(e.target)) {
     formPanel.style.display = 'none';
   }
 });
 
 document.getElementById('reset-btn').onclick = (e) => {
   e.stopPropagation();
-  nodes = []; lines = []; fluidZones = {}; formPanel.style.display = 'none'; summaryPanel.style.display = 'none';
+  nodes = []; lines = []; fluidZones = {}; formPanel.style.display = 'none';
   render();
   updatePaletteState();
 };
@@ -829,49 +821,52 @@ function findPumpIdx() { return nodes.findIndex(n => n.type === 'pump'); }
 
 function computeSummary() {
   const pumpIdx = findPumpIdx();
-  if (pumpIdx === -1) return {ok:false, msg:'Add a Pump to the sequence to compute the summary.'};
-  if (pumpIdx === 0 || pumpIdx === nodes.length - 1) return {ok:false, msg:'The pump needs at least one item before it (suction side) and one after it (discharge side).'};
+  if (pumpIdx === -1 || pumpIdx === 0 || pumpIdx === nodes.length - 1) return {ok:false};
 
   const startNode = nodes[0], endNode = nodes[nodes.length - 1], pumpNode = nodes[pumpIdx];
-  if (!['tank','tower','misc'].includes(startNode.type) || !['tank','tower','misc'].includes(endNode.type)) {
-    return {ok:false, msg:'The summary needs a Tank, Tower, or Miscellaneous (as a known-pressure boundary) at both the start and end of the sequence.'};
-  }
+  const validBoundaries = ['tank','tower','misc'].includes(startNode.type) && ['tank','tower','misc'].includes(endNode.type);
+  if (!validBoundaries) return {ok:false};
 
-  let sucLineDp = 0;
+  let sucLineDp = null, disLineDp = null;
+  let sucOk = true;
   for (let k = 0; k < pumpIdx; k++) {
     const r = computeLineResult(lines[k], getZone(lineZone(k)));
-    if (!r.ok) return {ok:false, msg:'Fill in every suction line\'s specs to compute the summary.'};
-    sucLineDp += r.dpBar;
+    if (!r.ok) { sucOk = false; break; }
+    sucLineDp = (sucLineDp||0) + r.dpBar;
   }
-  let disLineDp = 0;
+  if (!sucOk) sucLineDp = null;
+  let disOk = true;
   for (let k = pumpIdx; k < lines.length; k++) {
     const r = computeLineResult(lines[k], getZone(lineZone(k)));
-    if (!r.ok) return {ok:false, msg:'Fill in every discharge line\'s specs to compute the summary.'};
-    disLineDp += r.dpBar;
+    if (!r.ok) { disOk = false; break; }
+    disLineDp = (disLineDp||0) + r.dpBar;
   }
+  if (!disOk) disLineDp = null;
 
-  let sucEquipDp = 0;
+  let sucEquipDp = 0, sucEquipOk = true;
   for (let i = 1; i < pumpIdx; i++) {
     const nd = nodes[i];
     if (EQUIP_DP_TYPES.includes(nd.type)) sucEquipDp += parseFloat(nd.data.dp) || 0;
     else if (nd.type === 'reducer' || nd.type === 'enlarger') {
       const tr = computeTransitionDp(nd, i);
-      if (!tr.ok) return {ok:false, msg:'Fill in every Reducer/Enlarger transition type and adjacent line sizes/flows to compute the summary.'};
+      if (!tr.ok) { sucEquipOk = false; break; }
       sucEquipDp += tr.dpBar;
     }
   }
-  let disEquipDp = 0;
+  if (!sucEquipOk) sucEquipDp = null;
+  let disEquipDp = 0, disEquipOk = true;
   for (let i = pumpIdx + 1; i < nodes.length - 1; i++) {
     const nd = nodes[i];
     if (EQUIP_DP_TYPES.includes(nd.type)) disEquipDp += parseFloat(nd.data.dp) || 0;
     else if (nd.type === 'reducer' || nd.type === 'enlarger') {
       const tr = computeTransitionDp(nd, i);
-      if (!tr.ok) return {ok:false, msg:'Fill in every Reducer/Enlarger transition type and adjacent line sizes/flows to compute the summary.'};
+      if (!tr.ok) { disEquipOk = false; break; }
       disEquipDp += tr.dpBar;
     }
   }
-  const sucDp = sucLineDp + sucEquipDp;
-  const disDp = disLineDp + disEquipDp;
+  if (!disEquipOk) disEquipDp = null;
+  const sucDp = (sucLineDp !== null && sucEquipDp !== null) ? sucLineDp + sucEquipDp : null;
+  const disDp = (disLineDp !== null && disEquipDp !== null) ? disLineDp + disEquipDp : null;
 
   // Suction-side fluid properties come from the zone at the pump (accounts for an
   // exchanger sitting between the start tank and the pump); discharge-side fluid
@@ -879,11 +874,9 @@ function computeSummary() {
   // sitting between the pump and the destination tank/tower).
   const sucZone = getZone(nodeZone(pumpIdx));
   const disZone = getZone(nodeZone(nodes.length - 1));
-  const sucRho = parseFloat(sucZone.density);
-  const disRho = parseFloat(disZone.density);
+  const sucRho = parseFloat(sucZone.density) || null;
+  const disRho = parseFloat(disZone.density) || null;
   const vapor = parseFloat(sucZone.vapor);
-  if (!sucRho) return {ok:false, msg:'Set fluid density for the suction-side zone to compute the summary.'};
-  if (!disRho) return {ok:false, msg:'Set fluid density for the discharge-side zone to compute the summary.'};
 
   const g = 9.81;
   const elevPump = parseFloat(pumpNode.data.elevation) || 0;
@@ -912,26 +905,24 @@ function computeSummary() {
   const suctionOpPress = parseFloat(startNode.data.opress);
   const suctionDesPress = parseFloat(startNode.data.despress);
   const destOpPress = parseFloat(endNode.data.opress);
-  if (isNaN(suctionOpPress) || isNaN(destOpPress)) {
-    return {ok:false, msg:'Set Operating pressure on both the first and last equipment (Tank/Tower) to compute the summary.'};
-  }
+  const pressuresOk = !isNaN(suctionOpPress) && !isNaN(destOpPress);
 
   const staticHeadSuction = llll - elevPumpSuctionNozzle;
   const staticHeadDischarge = elevEndNozzle - elevPump;
 
-  const suctionPress = suctionOpPress + (sucRho*g*staticHeadSuction)/1e5 - sucDp;
-  const dischargePress = destOpPress + (disRho*g*staticHeadDischarge)/1e5 + disDp;
+  const suctionPress = (pressuresOk && sucRho !== null && sucDp !== null) ? suctionOpPress + (sucRho*g*staticHeadSuction)/1e5 - sucDp : null;
+  const dischargePress = (pressuresOk && disRho !== null && disDp !== null) ? destOpPress + (disRho*g*staticHeadDischarge)/1e5 + disDp : null;
 
-  const pumpDpCalc = dischargePress - suctionPress;
-  const tdh = (pumpDpCalc * 1e5) / (sucRho * g);
+  const pumpDpCalc = (suctionPress !== null && dischargePress !== null) ? dischargePress - suctionPress : null;
+  const tdh = (pumpDpCalc !== null && sucRho !== null) ? (pumpDpCalc * 1e5) / (sucRho * g) : null;
 
   const suctionDesignForMax = !isNaN(suctionDesPress) ? suctionDesPress : suctionOpPress;
   const maxSuctionHeadM = hhll - elevPumpSuctionNozzle;
-  const maxSuctionPressure = (sucRho*g*maxSuctionHeadM)/1e5 + suctionDesignForMax;
-  const shutoffPressure = maxSuctionPressure + pumpDpCalc;
+  const maxSuctionPressure = (sucRho !== null && !isNaN(suctionDesignForMax)) ? (sucRho*g*maxSuctionHeadM)/1e5 + suctionDesignForMax : null;
+  const shutoffPressure = (maxSuctionPressure !== null && pumpDpCalc !== null) ? maxSuctionPressure + pumpDpCalc : null;
 
   let npsha = null;
-  if (!isNaN(vapor)) {
+  if (!isNaN(vapor) && sucRho !== null && sucDp !== null && !isNaN(suctionOpPress)) {
     npsha = ((suctionOpPress - vapor) * 1e5) / (sucRho * g) + staticHeadSuction - (sucDp * 1e5) / (sucRho * g);
   }
   const npshr = parseFloat(pumpNode.data.npshr);
@@ -941,14 +932,14 @@ function computeSummary() {
   const effP = parseFloat(pumpNode.data.effp);
   const effM = parseFloat(pumpNode.data.effm);
   let hydraulicPower = null, bhp = null, absorbedPower = null;
-  if (flow) {
+  if (flow && pumpDpCalc !== null) {
     hydraulicPower = (flow * pumpDpCalc) / 36;
     if (effP) bhp = hydraulicPower / (effP/100);
     if (bhp !== null && effM) absorbedPower = bhp / (effM/100);
   }
 
   return {ok:true, sucLineDp, sucEquipDp, sucDp, disLineDp, disEquipDp, disDp, suctionPress, dischargePress,
-    pumpDpCalc, maxSuctionPressure, shutoffPressure, tdh, npsha, npshr, npshMargin,
+    pumpDpCalc, maxSuctionPressure, shutoffPressure, tdh, npsha, npshr: isNaN(npshr)?null:npshr, npshMargin,
     hydraulicPower, bhp, absorbedPower, staticHeadSuction, staticHeadDischarge,
     governingDischargeElev: elevEndNozzle, destNozzleElev, highPointGoverns: elevEndNozzle > destNozzleElev};
 }
@@ -959,7 +950,7 @@ function summaryHtml() {
   const r = computeSummary();
   let html = '<p style="font-size:14px; font-weight:500; margin:0 0 14px;">Summary</p>';
   if (!r.ok) {
-    html += '<p style="font-size:13px; color:var(--text-secondary);">' + r.msg + '</p>';
+    html += '<p style="font-size:13px; color:var(--text-muted);">\u2014</p>';
     return html;
   }
   function row(label, val, unit) {
@@ -1013,12 +1004,6 @@ function summaryHtml() {
   html += '</table></div>';
   return html;
 }
-
-document.getElementById('summary-btn').onclick = (e) => {
-  e.stopPropagation();
-  summaryPanel.innerHTML = summaryHtml();
-  summaryPanel.style.display = 'block';
-};
 
 function fmtR(v, d) { return (v===null || v===undefined || isNaN(v)) ? '' : v.toFixed(d===undefined?2:d); }
 

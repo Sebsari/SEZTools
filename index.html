@@ -228,7 +228,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
         Modules
       </button>
-      <span class="m-title" id="moduleTitle"></span>
     </div>
     <div class="module-frame-wrap">
       <div class="frame-loading" id="frameLoading">LOADING…</div>
@@ -249,14 +248,11 @@
 
   var frame = document.getElementById('moduleFrame');
   var frameLoading = document.getElementById('frameLoading');
-  var moduleTitle = document.getElementById('moduleTitle');
   var loadedSrc = null;
 
   document.querySelectorAll('.mod-card').forEach(function(card){
     card.addEventListener('click', function(){
       var src = card.getAttribute('data-module');
-      var title = card.getAttribute('data-title');
-      moduleTitle.textContent = title;
       show('module');
       if (loadedSrc !== src){
         frameLoading.style.opacity = '1';
