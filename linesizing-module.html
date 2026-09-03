@@ -217,8 +217,31 @@ function App(){
   }
 
   function upd(key){return function(e){var v=e.target.value===''?'':parseFloat(e.target.value);var nf=Object.assign({},f);nf[key]=v;setF(nf);rc(nf,flowType,calcMethod,schedule,fU,fits);};}
-  function changeFU(key,nu){var nfu=Object.assign({},fU);nfu[key]=nu;setFU(nfu);rc(f,flowType,calcMethod,schedule,nfu,fits);}
-  function setAllU(sys){var nfu=Object.assign({},fU);Object.keys(FIELD_UNIT_TYPE).forEach(function(key){nfu[key]=sys;});setUnitSys(sys);setFU(nfu);rc(f,flowType,calcMethod,schedule,nfu,fits);}
+  function changeFU(key,nu){
+    var nfu=Object.assign({},fU);
+    var oldU=fU[key],ftype=FIELD_UNIT_TYPE[key];
+    var nf=f;
+    var rawVal=f[key];
+    if(ftype&&oldU!==nu&&rawVal!==''&&rawVal!=null&&!Number.isNaN(rawVal)){
+      var siVal=UNIT_CONV[ftype][oldU].toSI(rawVal);
+      nf=Object.assign({},f);
+      nf[key]=UNIT_CONV[ftype][nu].fromSI(siVal);
+    }
+    nfu[key]=nu;setFU(nfu);if(nf!==f)setF(nf);rc(nf,flowType,calcMethod,schedule,nfu,fits);
+  }
+  function setAllU(sys){
+    var nfu=Object.assign({},fU);
+    var nf=Object.assign({},f);
+    Object.keys(FIELD_UNIT_TYPE).forEach(function(key){
+      var ftype=FIELD_UNIT_TYPE[key],oldU=fU[key],rawVal=f[key];
+      if(oldU!==sys&&rawVal!==''&&rawVal!=null&&!Number.isNaN(rawVal)){
+        var siVal=UNIT_CONV[ftype][oldU].toSI(rawVal);
+        nf[key]=UNIT_CONV[ftype][sys].fromSI(siVal);
+      }
+      nfu[key]=sys;
+    });
+    setUnitSys(sys);setFU(nfu);setF(nf);rc(nf,flowType,calcMethod,schedule,nfu,fits);
+  }
   function addFit(){setFits(fits.concat([{idx:0,qty:1,customK:0}]));rc(f,flowType,calcMethod,schedule,fU,fits.concat([{idx:0,qty:1,customK:0}]));}
   function rmFit(i){var nf=fits.filter(function(_,j){return j!==i;});setFits(nf);rc(f,flowType,calcMethod,schedule,fU,nf);}
   function upFit(i,field,value){var nf=fits.map(function(fi,j){return j===i?Object.assign({},fi):fi;});if(nf[i]){if(field==='idx')nf[i].idx=parseInt(value);else if(field==='qty')nf[i].qty=value;else nf[i].customK=value;}setFits(nf);rc(f,flowType,calcMethod,schedule,fU,nf);}
