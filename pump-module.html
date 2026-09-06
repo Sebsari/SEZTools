@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>SEZTools - Pump Hydraulic Calc.</title>
 <link rel="icon" href="icon-192.png"/>
+<script src="vendor/xlsx.full.min.js"></script>
 <style>
   @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('vendor/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');}
   @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:600;font-display:swap;src:url('vendor/fonts/jetbrains-mono-latin-600-normal.woff2') format('woff2');}
@@ -100,6 +101,7 @@
 
 <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
   <button id="pdf-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);">Export PDF</button>
+  <button id="excel-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);">Export Excel</button>
 </div>
 <div id="summary-panel" style="margin-top:1rem; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:1.25rem;"></div>
 <div id="print-report"></div>
@@ -145,12 +147,12 @@ const FLUID_FIELDS = [
 // (mid-path). Exchanger always uses the intermediate set since it can never
 // be a boundary node.
 const sourceRoleFields = [commonField,
-  {k:'nozzle_elev_out', l:'Outlet nozzle elevation above equipment base (m)'},
   {k:'hhll', l:'HHLL (m)'}, {k:'llll', l:'LLLL (m)'},
   {k:'opress', l:'Operating pressure (bar)'}, {k:'despress', l:'Design pressure (bar)'}
 ];
 const destRoleFields = [commonField,
   {k:'nozzle_elev_in', l:'Inlet nozzle elevation above equipment base (m)'},
+  {k:'hll', l:'HLL \u2014 High Liquid Level above equipment base (m, optional)', num:true, optional:true},
   {k:'opress', l:'Operating pressure (bar)'}
 ];
 const midRoleFields = [commonField,
@@ -162,12 +164,12 @@ const equipDefs = {
   tank: {label:'Tank', roleFields:true},
   pump: {label:'Pump', fields:[commonField,
     {k:'suction_nozzle_elev', l:'Suction nozzle center elevation above pump base (m)'},
-    {k:'npshMarginReq', l:'Required NPSH margin (m, per project scope/standard)', num:true}, {k:'effp', l:'Pump efficiency (%)'}, {k:'effm', l:'Motor efficiency (%)'},
-    {k:'shutoffRatio', l:'Shutoff \u0394P margin (% of rated \u0394P, default 120)', num:true}
+    {k:'npshMarginReq', l:'NPSH margin (m, per project scope/standard)', num:true}, {k:'effp', l:'Pump efficiency (%)'}, {k:'effm', l:'Motor efficiency (%)'},
+    {k:'shutoffRatio', l:'Shutoff \u0394P margin \u2014 optional, % of rated \u0394P (default 120 if left blank)', num:true, optional:true}
   ]},
-  valve: {label:'Control valve', fields:[
+  valve: {label:'Control valve', fields:[commonField,
     {k:'dp', l:'Pressure drop (bar)'},
-    {k:'dpFloor', l:'Suggested-dP minimum floor (bar, default 0.7)', num:true}
+    {k:'dpFloor', l:'Suggested-dP safety minimum \u2014 optional (bar, default 0.7 if left blank)', num:true, optional:true}
   ]},
   exchanger: {label:'Exchanger', fields: midRoleFields},
   point: {label:'High point', fields:[commonField,
@@ -343,7 +345,7 @@ const formPanel = document.getElementById('form-panel');
 const summaryPanel = document.getElementById('summary-panel');
 
 function isComplete(fields, dataObj) {
-  return fields.every(f => dataObj[f.k] !== undefined && dataObj[f.k] !== '');
+  return fields.every(f => f.optional || (dataObj[f.k] !== undefined && dataObj[f.k] !== ''));
 }
 function effectiveFields(def, idx) {
   const isStartBoundary = idx === 0;
@@ -1004,7 +1006,17 @@ function computeSummary() {
   const elevPumpSuctionNozzle = elevPump + suctionNozzleOffset;
   const elevStart = parseFloat(startNode.data.elevation) || 0;
   const endNozzleOffset = (endNode.data.nozzle_elev_in !== undefined && endNode.data.nozzle_elev_in !== '') ? parseFloat(endNode.data.nozzle_elev_in) : 0;
-  const destNozzleElev = (parseFloat(endNode.data.elevation) || 0) + endNozzleOffset;
+  let destNozzleElev = (parseFloat(endNode.data.elevation) || 0) + endNozzleOffset;
+  // Whichever is higher \u2014 nozzle entry point or HLL \u2014 governs, since a
+  // bottom-entry nozzle into a tank that can fill to HLL must still be
+  // pushed against the liquid column up to the surface, not just to where
+  // the nozzle physically enters.
+  const destHllRaw = parseFloat(endNode.data.hll);
+  let destHllElev = null;
+  if (!isNaN(destHllRaw)) {
+    destHllElev = (parseFloat(endNode.data.elevation) || 0) + destHllRaw;
+    if (destHllElev > destNozzleElev) destNozzleElev = destHllElev;
+  }
   // Conservative/standard practice: if a High Point along the discharge path
   // (e.g. a pipe rack the line crosses) sits above the destination nozzle,
   // the pump must be sized to reach that higher point instead — a full
@@ -1079,6 +1091,24 @@ function computeSummary() {
 // held constant across cases, per the drafted spec. This is intentionally
 // an approximation (no full velocity/Reynolds recompute) \u2014 same
 // simplification used in the reference hand-calc this was modeled on.
+// Approximates a centrifugal pump's own H-Q curve as a parabola through two
+// known points: (0, Hs) at shutoff and (Q_rated, Hr) at the Normal-case
+// duty point (the only case computed with the user's exact entered data,
+// not a Q\u00b2 approximation) \u2014 the same shape assumption already used for
+// the Shutoff \u0394P margin. Returns the pump's own head output (m) at any
+// other flow.
+function pumpHeadAtFlow(Qcase, r0) {
+  if (!r0 || !r0.ok || r0.tdh === null || !Qcase || isNaN(Qcase)) return null;
+  const pumpIdx = findPumpIdx();
+  if (pumpIdx < 0) return null;
+  const Qrated = parseFloat(nodes[pumpIdx].data.flow);
+  if (!Qrated || isNaN(Qrated)) return null;
+  const Hr = r0.tdh;
+  const Hs = Hr * (r0.shutoffRatio / 100);
+  const ratio = Qcase / Qrated;
+  return Hs - (Hs - Hr) * ratio * ratio;
+}
+
 function computeCaseSummary(caseKey, r0) {
   if (!r0 || !r0.ok) return {ok:false};
   const pumpIdx = findPumpIdx();
@@ -1106,14 +1136,6 @@ function computeCaseSummary(caseKey, r0) {
     sucLineDp += rr.dpBar * s;
   }
   if (!sucOk) sucLineDp = null;
-  let disLineDp = 0, disOk = true;
-  for (let k = pumpIdx; k < lines.length; k++) {
-    const s = lineScale(k);
-    const rr = computeLineResult(lines[k], getZone(lineZone(k)));
-    if (s === null || !rr.ok) { disOk = false; break; }
-    disLineDp += rr.dpBar * s;
-  }
-  if (!disOk) disLineDp = null;
 
   let sucEquipDp = 0, sucEquipOk = true;
   for (let i = 1; i < pumpIdx; i++) {
@@ -1128,27 +1150,11 @@ function computeCaseSummary(caseKey, r0) {
     }
   }
   if (!sucEquipOk) sucEquipDp = null;
-  let disEquipDp = 0, disEquipOk = true;
-  for (let i = pumpIdx + 1; i < nodes.length - 1; i++) {
-    const nd = nodes[i], s = nodeScale(i);
-    if (EQUIP_DP_TYPES.includes(nd.type)) {
-      if (s === null) { disEquipOk = false; break; }
-      disEquipDp += (parseFloat(nd.data.dp) || 0) * s;
-    } else if (nd.type === 'reducer' || nd.type === 'enlarger') {
-      const tr = computeTransitionDp(nd, i);
-      if (!tr.ok || s === null) { disEquipOk = false; break; }
-      disEquipDp += tr.dpBar * s;
-    }
-  }
-  if (!disEquipOk) disEquipDp = null;
-
   const sucDp = (sucLineDp !== null && sucEquipDp !== null) ? sucLineDp + sucEquipDp : null;
-  const disDp = (disLineDp !== null && disEquipDp !== null) ? disLineDp + disEquipDp : null;
 
   const sucZone = getZone(nodeZone(pumpIdx));
-  const disZone = getZone(nodeZone(nodes.length - 1));
   const sucRho = parseFloat(sucZone.density) || null;
-  const disRho = parseFloat(disZone.density) || null;
+  const disRho = parseFloat(getZone(nodeZone(nodes.length - 1)).density) || null;
   const vapor = parseFloat(sucZone.vapor);
   const g = 9.81;
   const suctionOpPress = parseFloat(startNode.data.opress);
@@ -1156,9 +1162,50 @@ function computeCaseSummary(caseKey, r0) {
   const pressuresOk = !isNaN(suctionOpPress) && !isNaN(destOpPress);
 
   const suctionPress = (pressuresOk && sucRho !== null && sucDp !== null) ? suctionOpPress + (sucRho*g*r0.staticHeadSuction)/1e5 - sucDp : null;
-  const dischargePress = (pressuresOk && disRho !== null && disDp !== null) ? destOpPress + (disRho*g*r0.staticHeadDischarge)/1e5 + disDp : null;
-  const pumpDpCalc = (suctionPress !== null && dischargePress !== null) ? dischargePress - suctionPress : null;
-  const tdh = (pumpDpCalc !== null && sucRho !== null) ? (pumpDpCalc * 1e5) / (sucRho * g) : null;
+
+  // Discharge side: if there's a Control Valve downstream of the pump, it's
+  // the balancing element (see computeCVResidualCase()) \u2014 the pump's own
+  // curve drives dischargePress, not a Q\u00b2-scaled sum through the valve.
+  // With no valve, fall back to the old system-required approach (sum every
+  // line/equipment dP, Q\u00b2-scaled, working backward from the fixed
+  // destination pressure).
+  let disValveIdx = -1;
+  for (let i = pumpIdx + 1; i < nodes.length - 1; i++) if (nodes[i].type === 'valve') disValveIdx = i;
+
+  let dischargePress, pumpDpCalc, tdh;
+  if (disValveIdx !== -1) {
+    const Qpump = nodeLocalFlow(pumpIdx, caseLineFlow);
+    const Hcase = pumpHeadAtFlow(Qpump, r0);
+    pumpDpCalc = (Hcase !== null && sucRho !== null) ? (Hcase * sucRho * g) / 1e5 : null;
+    tdh = Hcase;
+    dischargePress = (suctionPress !== null && pumpDpCalc !== null) ? suctionPress + pumpDpCalc : null;
+  } else {
+    let disLineDp = 0, disOk = true;
+    for (let k = pumpIdx; k < lines.length; k++) {
+      const s = lineScale(k);
+      const rr = computeLineResult(lines[k], getZone(lineZone(k)));
+      if (s === null || !rr.ok) { disOk = false; break; }
+      disLineDp += rr.dpBar * s;
+    }
+    if (!disOk) disLineDp = null;
+    let disEquipDp = 0, disEquipOk = true;
+    for (let i = pumpIdx + 1; i < nodes.length - 1; i++) {
+      const nd = nodes[i], s = nodeScale(i);
+      if (EQUIP_DP_TYPES.includes(nd.type)) {
+        if (s === null) { disEquipOk = false; break; }
+        disEquipDp += (parseFloat(nd.data.dp) || 0) * s;
+      } else if (nd.type === 'reducer' || nd.type === 'enlarger') {
+        const tr = computeTransitionDp(nd, i);
+        if (!tr.ok || s === null) { disEquipOk = false; break; }
+        disEquipDp += tr.dpBar * s;
+      }
+    }
+    if (!disEquipOk) disEquipDp = null;
+    const disDp = (disLineDp !== null && disEquipDp !== null) ? disLineDp + disEquipDp : null;
+    dischargePress = (pressuresOk && disRho !== null && disDp !== null) ? destOpPress + (disRho*g*r0.staticHeadDischarge)/1e5 + disDp : null;
+    pumpDpCalc = (suctionPress !== null && dischargePress !== null) ? dischargePress - suctionPress : null;
+    tdh = (pumpDpCalc !== null && sucRho !== null) ? (pumpDpCalc * 1e5) / (sucRho * g) : null;
+  }
 
   let npsha = null;
   if (!isNaN(vapor) && sucRho !== null && sucDp !== null && !isNaN(suctionOpPress)) {
@@ -1171,7 +1218,7 @@ function computeCaseSummary(caseKey, r0) {
   let hydraulicPower = null;
   if (flow && pumpDpCalc !== null) hydraulicPower = (flow * pumpDpCalc) / 36;
 
-  return {ok:true, flow, sucDp, disDp, suctionPress, dischargePress, pumpDpCalc, tdh, npsha, maxAllowableNpshr, hydraulicPower,
+  return {ok:true, flow, sucDp, suctionPress, dischargePress, pumpDpCalc, tdh, npsha, maxAllowableNpshr, hydraulicPower,
     caseLineFlow};
 }
 
@@ -1195,7 +1242,7 @@ function summaryHtml() {
   html += row('Static head (LLLL \u2192 pump)', fmt(r.staticHeadSuction,2), 'm');
   html += row('Suction pressure at pump', fmt(r.suctionPress,3), 'bara');
   html += row('NPSH available', fmt(r.npsha,2), 'm');
-  html += row('Required NPSH margin (input)', fmt(r.npshMarginReq,2), 'm');
+  html += row('NPSH margin (input)', fmt(r.npshMarginReq,2), 'm');
   html += row('Max. allowable NPSHR (for TBE)', fmt(r.maxAllowableNpshr,2), 'm');
   html += '</table></div>';
   html += '<div><p style="font-size:12px; color:var(--text-muted); margin:0 0 6px;">DISCHARGE</p><table style="font-size:13px;">';
@@ -1235,6 +1282,40 @@ function summaryHtml() {
   html += row('Absorbed power', fmt(r.absorbedPower,2), 'kW');
   html += '</table></div>';
   html += threePointSummaryHtml(r);
+  html += pumpHeadEstimationHtml(r);
+  return html;
+}
+
+function pumpHeadEstimationHtml(r0) {
+  if (!r0 || !r0.ok || r0.tdh === null) return '';
+  if (!getZoneAnyHasMinMax()) return '';
+  const pumpIdx = findPumpIdx();
+  const cases = [
+    {key:'qMin', label:'MIN'},
+    {key:'flow', label:'NORMAL (rated)'},
+    {key:'qMax', label:'MAX'}
+  ];
+  const rows = cases.map(c => {
+    const caseLineFlow = computeFlowMapForBase(c.key);
+    const Qcase = nodeLocalFlow(pumpIdx, caseLineFlow);
+    const H = (c.key === 'flow') ? r0.tdh : pumpHeadAtFlow(Qcase, r0);
+    const rise = (H !== null) ? H - r0.tdh : null;
+    return {label:c.label, flow:Qcase, head:H, rise};
+  });
+  const Hs = r0.tdh * (r0.shutoffRatio / 100);
+  let html = '<div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">';
+  html += '<p style="font-size:12px; color:var(--text-muted); margin:0 0 6px;">PUMP HEAD ESTIMATION (curve interpolation)</p>';
+  html += '<table style="font-size:12px; width:100%;"><tr><th></th>' + rows.map(x=>'<th style="text-align:left; padding:2px 12px 2px 0;">'+x.label+'</th>').join('') + '</tr>';
+  function tr(label, get, unit, dec) {
+    return '<tr><td style="color:var(--text-secondary); padding:2px 12px 2px 0;">'+label+'</td>' +
+      rows.map(x => '<td>' + (get(x)!==null && get(x)!==undefined && !isNaN(get(x)) ? fmt(get(x), dec) + (unit?' '+unit:'') : '\u2014') + '</td>').join('') + '</tr>';
+  }
+  html += tr('Flow', x=>x.flow, 'm3/h', 1);
+  html += tr('Pump head (estimated)', x=>x.head, 'm', 1);
+  html += tr('Head rise vs. Normal', x=>x.rise, 'm', 1);
+  html += '</table>';
+  html += '<p style="font-size:11px; color:var(--text-muted); margin-top:8px;">Estimated head at Shutoff (Q=0): ' + fmt(Hs,1) + ' m (Normal-case head \u00d7 Shutoff \u0394P margin). Curve shape assumed parabolic through the Shutoff point and the Normal-case duty point \u2014 an early-sizing approximation, not the selected pump\u2019s actual vendor curve.</p>';
+  html += '</div>';
   return html;
 }
 
@@ -1336,7 +1417,6 @@ function buildReportHtml() {
   const sucZone = getZone(nodeZone(pumpIdx));
   const disZone = getZone(nodeZone(nodes.length - 1));
   const endNozzleOffsetR = (endNode.data.nozzle_elev_in !== undefined && endNode.data.nozzle_elev_in !== '') ? parseFloat(endNode.data.nozzle_elev_in) : 0;
-  const endElev = (parseFloat(endNode.data.elevation) || 0) + endNozzleOffsetR;
 
   html += '<div class="rpt-section-title">1. BASIC DATA</div><table>';
   html += '<tr><td>Liquid Density (suction)</td><td>' + fmtR(parseFloat(sucZone.density),1) + ' kg/m3</td><td>Liquid Density (discharge)</td><td>' + fmtR(parseFloat(disZone.density),1) + ' kg/m3</td></tr>';
@@ -1350,9 +1430,10 @@ function buildReportHtml() {
   html += '<tr><td>Tag</td><td>' + vTag(startNode) + '</td><td>' + vTag(endNode) + '</td></tr>';
   html += '<tr><td>Type</td><td>' + equipDefs[startNode.type].label + '</td><td>' + equipDefs[endNode.type].label + '</td></tr>';
   html += '<tr><td>Installation Elevation (m)</td><td>' + fmtR(parseFloat(startNode.data.elevation),2) + '</td><td>' + fmtR(parseFloat(endNode.data.elevation),2) + '</td></tr>';
-  const startNozzleOffsetR = (startNode.data.nozzle_elev_out !== undefined && startNode.data.nozzle_elev_out !== '') ? parseFloat(startNode.data.nozzle_elev_out) : null;
-  html += '<tr><td>Nozzle Elevation Above Base (m)</td><td>' + (startNozzleOffsetR!==null ? fmtR(startNozzleOffsetR,2) : '\u2014') + '</td><td>' + fmtR(endNozzleOffsetR,2) + '</td></tr>';
-  html += '<tr><td>Effective Inlet Nozzle Elevation (m)</td><td>\u2014</td><td>' + fmtR(parseFloat(endElev),2) + '</td></tr>';
+  html += '<tr><td>Nozzle Elevation Above Base (m)</td><td></td><td>' + fmtR(endNozzleOffsetR,2) + '</td></tr>';
+  const endHllR = (endNode.data.hll !== undefined && endNode.data.hll !== '') ? parseFloat(endNode.data.hll) : null;
+  if (endHllR !== null) html += '<tr><td>HLL Above Base (m)</td><td></td><td>' + fmtR(endHllR,2) + '</td></tr>';
+  html += '<tr><td>Effective Inlet Nozzle Elevation (m)</td><td></td><td>' + fmtR(r.governingDischargeElev,2) + '</td></tr>';
   if (r.highPointGoverns) {
     html += '<tr><td colspan="4" style="color:#9C3A32;"><b>Note:</b> A High Point along the discharge path (' + fmtR(r.governingDischargeElev,2) + ' m) is higher than the destination nozzle \u2014 the pump was sized to reach that elevation instead (conservative practice).</td></tr>';
   }
@@ -1376,8 +1457,8 @@ function buildReportHtml() {
     return t;
   }
   html += '<p style="font-weight:600; margin:6px 0 2px;">Suction lines</p>' + lineRowsHtml(0, pumpIdx);
-  html += '<p style="font-weight:600; margin:6px 0 2px;">Discharge lines</p>' + lineRowsHtml(pumpIdx, lines.length);
   html += '<p style="font-weight:600; margin:6px 0 2px;">Suction In-line Equipment (control valves, orifices, filters, misc.)</p>' + equipRowsHtml(1, pumpIdx);
+  html += '<p style="font-weight:600; margin:6px 0 2px;">Discharge lines</p>' + lineRowsHtml(pumpIdx, lines.length);
   html += '<p style="font-weight:600; margin:6px 0 2px;">Discharge In-line Equipment (control valves, orifices, filters, misc.)</p>' + equipRowsHtml(pumpIdx+1, nodes.length-1);
   html += '<table style="margin-top:4px;"><tr><td>Total Suction DP</td><td>' + fmtR(r.sucDp,3) + ' bar</td><td>Total Discharge DP</td><td>' + fmtR(r.disDp,3) + ' bar</td></tr></table>';
 
@@ -1404,6 +1485,8 @@ function buildReportHtml() {
   });
   if (anyTransitionNotes) html += '<div style="margin-top:6px;">' + anyTransitionNotes + '</div>';
 
+  html += threePointReportHtml(r);
+  html += pumpHeadEstimationReportHtml(r);
   html += controlValveDatasheetHtml(r);
 
   return html;
@@ -1424,6 +1507,57 @@ function computeValveCv(flowM3h, dpBar, densityKgM3) {
 // module), the resulting valve dP, and Cv via the base ISA-75.01.01 liquid
 // formula (no Fp/choked-flow correction \u2014 an early-sizing estimate, not a
 // substitute for the vendor's own sizing).
+function threePointReportHtml(r0) {
+  if (!getZoneAnyHasMinMax()) return '';
+  const cases = [{key:'qMin', label:'Min'}, {key:'flow', label:'Normal'}, {key:'qMax', label:'Max'}];
+  const results = cases.map(c => ({label:c.label, r: c.key==='flow' ? r0 : computeCaseSummary(c.key, r0)}));
+  let html = '<div class="rpt-section-title">6. MIN / NORMAL / MAX FLOW CASES</div>';
+  html += '<table><tr><th></th>' + results.map(x=>'<th>'+x.label+'</th>').join('') + '</tr>';
+  function tr(label, get, unit, dec) {
+    return '<tr><td>'+label+'</td>' + results.map(x => '<td>' + (x.r && x.r.ok && get(x.r)!==null ? fmtR(get(x.r), dec) + (unit?' '+unit:'') : '\u2014') + '</td>').join('') + '</tr>';
+  }
+  html += tr('Flow', x=>x.flow, 'm3/h', 1);
+  html += tr('Suction pressure', x=>x.suctionPress, 'bara', 3);
+  html += tr('Discharge pressure', x=>x.dischargePress, 'bara', 3);
+  html += tr('Pump \u0394P', x=>x.pumpDpCalc, 'bar', 3);
+  html += tr('TDH', x=>x.tdh, 'm', 1);
+  html += tr('NPSH available', x=>x.npsha, 'm', 2);
+  html += tr('Max. allowable NPSHR', x=>x.maxAllowableNpshr, 'm', 2);
+  html += tr('Hydraulic power', x=>x.hydraulicPower, 'kW', 2);
+  html += '</table>';
+  html += '<p style="font-size:10px; color:#666; margin:2px 0 6px;">Min/Max friction dP is scaled by (Q/Q normal)\u00b2 per line/equipment (not a full recompute); static heads and boundary pressures are held constant across cases. Where a discharge Control Valve is present, its dP is solved as a residual balancing the pump curve against the fixed destination pressure (see section 8), not scaled.</p>';
+  return html;
+}
+
+function pumpHeadEstimationReportHtml(r0) {
+  if (!r0 || !r0.ok || r0.tdh === null) return '';
+  if (!getZoneAnyHasMinMax()) return '';
+  const pumpIdx = findPumpIdx();
+  const cases = [{key:'qMin', label:'Min'}, {key:'flow', label:'Normal (rated)'}, {key:'qMax', label:'Max'}];
+  const rows = cases.map(c => {
+    const caseLineFlow = computeFlowMapForBase(c.key);
+    const Qcase = nodeLocalFlow(pumpIdx, caseLineFlow);
+    const H = (c.key === 'flow') ? r0.tdh : pumpHeadAtFlow(Qcase, r0);
+    const rise = (H !== null) ? H - r0.tdh : null;
+    return {label:c.label, flow:Qcase, head:H, rise};
+  });
+  const Hs = r0.tdh * (r0.shutoffRatio / 100);
+  let html = '<div class="rpt-section-title">7. PUMP HEAD ESTIMATION</div>';
+  html += '<table><tr><th></th>' + rows.map(x=>'<th>'+x.label+'</th>').join('') + '</tr>';
+  function tr(label, get, unit, dec) {
+    return '<tr><td>'+label+'</td>' + rows.map(x => {
+      const v = get(x);
+      return '<td>' + (v !== null && v !== undefined && !isNaN(v) ? fmtR(v, dec) + (unit?' '+unit:'') : '\u2014') + '</td>';
+    }).join('') + '</tr>';
+  }
+  html += tr('Flow', x=>x.flow, 'm3/h', 1);
+  html += tr('Pump head (estimated)', x=>x.head, 'm', 1);
+  html += tr('Head rise vs. Normal', x=>x.rise, 'm', 1);
+  html += '</table>';
+  html += '<p style="font-size:10px; color:#666; margin:2px 0 6px;">Estimated head at Shutoff (Q=0): ' + fmtR(Hs,1) + ' m (Normal-case head \u00d7 Shutoff \u0394P margin). Parabolic curve shape through the Shutoff point and the Normal-case duty point \u2014 an early-sizing approximation, not the selected pump\u2019s actual vendor curve.</p>';
+  return html;
+}
+
 function controlValveDatasheetHtml(r0) {
   if (!r0 || !r0.ok) return '';
   const pumpIdx = findPumpIdx();
@@ -1433,11 +1567,16 @@ function controlValveDatasheetHtml(r0) {
 
   const normalLineFlow = computeFlowMapForBase('flow');
   const caseKeys = [{key:'qMin', label:'Min'}, {key:'flow', label:'Normal'}, {key:'qMax', label:'Max'}];
+  const disRho = parseFloat(getZone(nodeZone(nodes.length - 1)).density) || null;
+  const elevPump = parseFloat(nodes[pumpIdx].data.elevation) || 0;
+  const g = 9.81;
 
-  function cumulativeDp(side, idx, normalArr, caseArr) {
+  // Friction-only (Q\u00b2-scaled) sum between two node indices \u2014 elevation is
+  // handled separately by the caller, since a segment's elevation delta
+  // doesn't depend on the case flow.
+  function frictionSum(fromLineIdx, toIdx, fromNodeIdx, normalArr, caseArr) {
     let cum = 0;
-    const lineFrom = (side === 'discharge') ? pumpIdx : 0;
-    for (let k = lineFrom; k < idx; k++) {
+    for (let k = fromLineIdx; k < toIdx; k++) {
       const nfk = normalArr[k], cfk = caseArr[k];
       if (!nfk || isNaN(nfk) || cfk === null || cfk === undefined || isNaN(cfk)) return null;
       const sc = (cfk/nfk)*(cfk/nfk);
@@ -1445,8 +1584,7 @@ function controlValveDatasheetHtml(r0) {
       if (!rr.ok) return null;
       cum += rr.dpBar * sc;
     }
-    const nodeFrom = (side === 'discharge') ? pumpIdx + 1 : 1;
-    for (let i2 = nodeFrom; i2 < idx; i2++) {
+    for (let i2 = fromNodeIdx; i2 < toIdx; i2++) {
       const nd2 = nodes[i2];
       const nfk = nodeLocalFlow(i2, normalArr), cfk = nodeLocalFlow(i2, caseArr);
       if (nfk === null || !nfk || cfk === null) return null;
@@ -1461,8 +1599,8 @@ function controlValveDatasheetHtml(r0) {
     return cum;
   }
 
-  let html = '<div class="rpt-section-title">6. CONTROL VALVE PROCESS DATASHEET</div>';
-  html += '<p style="font-size:10px; color:#666; margin:2px 0 6px;">Approximate sizing datasheet: friction/equipment dP (incl. this valve\u2019s own manually-entered dP) is scaled by (Q/Q normal)\u00b2 for Min/Max \u2014 i.e. it assumes the valve stays at roughly the same opening across cases, since this tool does not model the pump curve needed to solve for the actual required opening at each flow. Elevation between intermediate points is not tracked. Cv shown is the base ISA-75.01.01 liquid formula only (no Fp/choked-flow correction). Because of the constant-opening assumption, Cv(min)/Cv(max) will always land near 100% here \u2014 that is a property of this method, not a rangeability result; a real rangeability check needs the valve vendor\u2019s actual sizing at each case\u2019s true required dP. Verify against the vendor\u2019s own data sheet.</p>';
+  let html = '<div class="rpt-section-title">8. CONTROL VALVE PROCESS DATASHEET</div>';
+  html += '<p style="font-size:10px; color:#666; margin:2px 0 6px;">Discharge-side valve dP is solved as the residual needed to balance the pump\u2019s own curve (interpolated between the Normal-case duty point and the Shutoff estimate) against the fixed destination pressure \u2014 not scaled from the manually-entered dP \u2014 which correctly increases at Min flow (valve closes more) and decreases at Max flow, matching real control-valve behavior. A suction-side valve (no fixed anchor to balance against) still uses the simpler (Q/Q normal)\u00b2 scaling of its own entered dP. If this valve\u2019s own Elevation field is left blank, it defaults to the pump\u2019s elevation (no pump\u2192valve elevation credit; the full pump\u2192destination elevation change is then carried on the valve\u2192destination segment). Cv is the base ISA-75.01.01 liquid formula only (no Fp/choked-flow correction) \u2014 verify against the valve vendor\u2019s own data sheet.</p>';
 
   valveIdxs.forEach(idx => {
     const nd = nodes[idx];
@@ -1471,27 +1609,38 @@ function controlValveDatasheetHtml(r0) {
     const zone = getZone(nodeZone(idx));
     const rho = parseFloat(zone.density);
     const ownDpNormal = parseFloat(nd.data.dp) || 0;
+    const elevValveRaw = parseFloat(nd.data.elevation);
+    const elevValve = isNaN(elevValveRaw) ? elevPump : elevValveRaw;
 
     const rowsData = caseKeys.map(c => {
       const caseLineFlow = computeFlowMapForBase(c.key);
       const localFlow = nodeLocalFlow(idx, caseLineFlow);
-      const nf = nodeLocalFlow(idx, normalLineFlow);
-      const scale = (nf && localFlow !== null) ? (localFlow/nf)*(localFlow/nf) : null;
-      const valveDp = (scale !== null) ? ownDpNormal * scale : null;
       const caseR = (c.key === 'flow') ? r0 : computeCaseSummary(c.key, r0);
-      const cum = (caseR && caseR.ok) ? cumulativeDp(side, idx, normalLineFlow, caseLineFlow) : null;
-      let inletP = null, outletP = null;
-      if (cum !== null && caseR && caseR.ok) {
-        if (side === 'discharge') {
-          const pumpOutlet = (caseR.suctionPress !== null && caseR.pumpDpCalc !== null) ? caseR.suctionPress + caseR.pumpDpCalc : null;
-          if (pumpOutlet !== null) inletP = pumpOutlet - cum;
-        } else {
-          const srcP = parseFloat(nodes[0].data.opress);
-          if (!isNaN(srcP)) inletP = srcP - cum;
+      let inletP = null, outletP = null, valveDp = null, cv = null;
+
+      if (side === 'discharge') {
+        const pumpOutlet = (caseR && caseR.ok && caseR.suctionPress !== null && caseR.pumpDpCalc !== null) ? caseR.suctionPress + caseR.pumpDpCalc : null;
+        const fricA = frictionSum(pumpIdx, idx, pumpIdx + 1, normalLineFlow, caseLineFlow);
+        if (pumpOutlet !== null && fricA !== null && disRho !== null) {
+          inletP = pumpOutlet - (disRho*g*(elevValve - elevPump))/1e5 - fricA;
         }
+        const elevDest = r0.governingDischargeElev;
+        const fricB = frictionSum(idx + 1, nodes.length - 1, idx + 1, normalLineFlow, caseLineFlow);
+        const destOpPress = parseFloat(nodes[nodes.length-1].data.opress);
+        if (!isNaN(destOpPress) && fricB !== null && disRho !== null) {
+          outletP = destOpPress + (disRho*g*(elevDest - elevValve))/1e5 + fricB;
+        }
+        if (inletP !== null && outletP !== null) valveDp = inletP - outletP;
+      } else {
+        const nf = nodeLocalFlow(idx, normalLineFlow);
+        const scale = (nf && localFlow !== null) ? (localFlow/nf)*(localFlow/nf) : null;
+        valveDp = (scale !== null) ? ownDpNormal * scale : null;
+        const fricA = frictionSum(0, idx, 1, normalLineFlow, caseLineFlow);
+        const srcP = parseFloat(nodes[0].data.opress);
+        if (!isNaN(srcP) && fricA !== null) inletP = srcP - fricA;
         if (inletP !== null && valveDp !== null) outletP = inletP - valveDp;
       }
-      const cv = (localFlow && valveDp && valveDp > 0 && rho) ? computeValveCv(localFlow, valveDp, rho) : null;
+      if (localFlow && valveDp && valveDp > 0 && rho) cv = computeValveCv(localFlow, valveDp, rho);
       return {label:c.label, flow:localFlow, inletP, outletP, dp:valveDp, cv};
     });
 
@@ -1519,6 +1668,175 @@ document.getElementById('pdf-btn').onclick = (e) => {
   printReport.innerHTML = buildReportHtml();
   printReport.style.display = 'block';
   window.print();
+};
+
+function num(v) { return (v === null || v === undefined || isNaN(v)) ? '' : v; }
+
+document.getElementById('excel-btn').onclick = (e) => {
+  e.stopPropagation();
+  const r = computeSummary();
+  if (!r.ok) { alert('Complete the calculation first (boundaries, pump, pipe sizes, fluid properties) before exporting.'); return; }
+  const pumpIdx = findPumpIdx();
+  const startNode = nodes[0], endNode = nodes[nodes.length-1], pumpNode = nodes[pumpIdx];
+  const sucZone = getZone(nodeZone(pumpIdx)), disZone = getZone(nodeZone(nodes.length-1));
+  const wb = XLSX.utils.book_new();
+
+  // --- Sheet 1: Basic Data & Vessels ---
+  const s1 = [
+    ['CALCULATION SHEET FOR PUMPS'], [],
+    ['1. BASIC DATA'],
+    ['Liquid Density (suction)', num(parseFloat(sucZone.density)), 'kg/m3', 'Liquid Density (discharge)', num(parseFloat(disZone.density)), 'kg/m3'],
+    ['Viscosity (suction)', num(parseFloat(sucZone.viscosity)), 'cP', 'Viscosity (discharge)', num(parseFloat(disZone.viscosity)), 'cP'],
+    ['Vapor Pressure (suction)', num(parseFloat(sucZone.vapor)), 'bar(a)', 'Pump Capacity [Qd]', num(parseFloat(pumpNode.data.flow)), 'm3/h'],
+    [],
+    ['2. VESSEL DATA', '', '', 'Suction Vessel', 'Delivery Vessel'],
+    ['Tag', '', '', (startNode.tag&&startNode.tag.tag)||'', (endNode.tag&&endNode.tag.tag)||''],
+    ['Type', '', '', equipDefs[startNode.type].label, equipDefs[endNode.type].label],
+    ['Installation Elevation (m)', '', '', num(parseFloat(startNode.data.elevation)), num(parseFloat(endNode.data.elevation))],
+    ['Nozzle Elevation Above Base (m)', '', '', '', num(parseFloat(endNode.data.nozzle_elev_in))],
+    ['HLL Above Base (m)', '', '', '', num(parseFloat(endNode.data.hll))],
+    ['Effective Inlet Nozzle Elevation (m)', '', '', '', num(r.governingDischargeElev)],
+    ['HHLL (m)', '', '', num(parseFloat(startNode.data.hhll)), ''],
+    ['LLLL (m)', '', '', num(parseFloat(startNode.data.llll)), ''],
+    ['Operating Pressure (bar a)', '', '', num(parseFloat(startNode.data.opress)), num(parseFloat(endNode.data.opress))],
+    ['Design Pressure (bar a)', '', '', num(parseFloat(startNode.data.despress)), '']
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s1), 'Basic Data');
+
+  // --- Sheet 2: Line Pressure Drop ---
+  const s2 = [['LINE PRESSURE DROP'], [], ['Suction lines'], ['Line', 'NPS', 'Flow (m3/h)', 'Velocity (m/s)', 'Length (m)', 'Specific DP (bar/km)', 'Line DP (bar)']];
+  for (let k = 0; k < pumpIdx; k++) {
+    const rr = computeLineResult(lines[k], getZone(lineZone(k)));
+    s2.push([(lines[k].tag&&lines[k].tag.tag)||('L'+(k+1)), lines[k].data.nps||'', num(parseFloat(lines[k].data.flow)), rr.ok?num(rr.V):'', num(parseFloat(lines[k].data.length)), rr.ok?num(rr.dpKm):'', rr.ok?num(rr.dpBar):'']);
+  }
+  s2.push([], ['Discharge lines'], ['Line', 'NPS', 'Flow (m3/h)', 'Velocity (m/s)', 'Length (m)', 'Specific DP (bar/km)', 'Line DP (bar)']);
+  for (let k = pumpIdx; k < lines.length; k++) {
+    const rr = computeLineResult(lines[k], getZone(lineZone(k)));
+    s2.push([(lines[k].tag&&lines[k].tag.tag)||('L'+(k+1)), lines[k].data.nps||'', num(parseFloat(lines[k].data.flow)), rr.ok?num(rr.V):'', num(parseFloat(lines[k].data.length)), rr.ok?num(rr.dpKm):'', rr.ok?num(rr.dpBar):'']);
+  }
+  s2.push([], ['Suction In-line Equipment'], ['Tag', 'Type', 'DP (bar)']);
+  for (let i = 1; i < pumpIdx; i++) { const nd = nodes[i]; if (EQUIP_DP_TYPES.includes(nd.type)) s2.push([(nd.tag&&nd.tag.tag)||'', equipDefs[nd.type].label, num(parseFloat(nd.data.dp))]); }
+  s2.push([], ['Discharge In-line Equipment'], ['Tag', 'Type', 'DP (bar)']);
+  for (let i = pumpIdx+1; i < nodes.length-1; i++) { const nd = nodes[i]; if (EQUIP_DP_TYPES.includes(nd.type)) s2.push([(nd.tag&&nd.tag.tag)||'', equipDefs[nd.type].label, num(parseFloat(nd.data.dp))]); }
+  s2.push([], ['Total Suction DP (bar)', num(r.sucDp)], ['Total Discharge DP (bar)', num(r.disDp)]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2), 'Line Pressure Drop');
+
+  // --- Sheet 3: Hydraulic Results & Pump Characteristics ---
+  const s3 = [
+    ['4. HYDRAULIC RESULTS'],
+    ['Suction Pressure at Pump (bara)', num(r.suctionPress)], ['Discharge Pressure at QD (bara)', num(r.dischargePress)],
+    ['NPSH Available (m)', num(r.npsha)], ['NPSH Margin (m)', num(r.npshMarginReq)], ['Max. Allowable NPSHR (m)', num(r.maxAllowableNpshr)],
+    [],
+    ['5. PUMP CHARACTERISTICS'],
+    ['Pump DP Calc. (bar)', num(r.pumpDpCalc)], ['TDH (m)', num(r.tdh)],
+    ['Maximum suction pressure (bara)', num(r.maxSuctionPressure)], ['Shutoff \u0394P margin used (%)', num(r.shutoffRatio)], ['Pump Shut-off / Design Pressure (bara)', num(r.shutoffPressure)],
+    ['Pump Efficiency (%)', num(parseFloat(pumpNode.data.effp))], ['Motor Efficiency (%)', num(parseFloat(pumpNode.data.effm))],
+    ['Hydraulic Power (kW)', num(r.hydraulicPower)], ['BHP (kW)', num(r.bhp)], ['Absorbed Power (kW)', num(r.absorbedPower)]
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s3), 'Hydraulic Results');
+
+  // --- Sheet 4: Min/Normal/Max flow cases ---
+  if (getZoneAnyHasMinMax()) {
+    const cases = [{key:'qMin', label:'Min'}, {key:'flow', label:'Normal'}, {key:'qMax', label:'Max'}];
+    const results = cases.map(c => ({label:c.label, r: c.key==='flow' ? r : computeCaseSummary(c.key, r)}));
+    const s4 = [['MIN / NORMAL / MAX FLOW CASES'], ['', ...results.map(x=>x.label)]];
+    function row4(label, get) { return [label, ...results.map(x => x.r && x.r.ok ? num(get(x.r)) : '')]; }
+    s4.push(row4('Flow (m3/h)', x=>x.flow), row4('Suction pressure (bara)', x=>x.suctionPress), row4('Discharge pressure (bara)', x=>x.dischargePress),
+      row4('Pump \u0394P (bar)', x=>x.pumpDpCalc), row4('TDH (m)', x=>x.tdh), row4('NPSH available (m)', x=>x.npsha),
+      row4('Max. allowable NPSHR (m)', x=>x.maxAllowableNpshr), row4('Hydraulic power (kW)', x=>x.hydraulicPower));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s4), 'Min-Norm-Max');
+
+    // --- Sheet 5: Pump head estimation ---
+    if (r.tdh !== null) {
+      const rows5 = cases.map(c => {
+        const caseLineFlow = computeFlowMapForBase(c.key);
+        const Qcase = nodeLocalFlow(pumpIdx, caseLineFlow);
+        const H = (c.key === 'flow') ? r.tdh : pumpHeadAtFlow(Qcase, r);
+        return {label:c.label, flow:Qcase, head:H, rise: H!==null ? H-r.tdh : null};
+      });
+      const s5 = [['PUMP HEAD ESTIMATION'], ['', ...rows5.map(x=>x.label)],
+        ['Flow (m3/h)', ...rows5.map(x=>num(x.flow))],
+        ['Pump head, estimated (m)', ...rows5.map(x=>num(x.head))],
+        ['Head rise vs. Normal (m)', ...rows5.map(x=>num(x.rise))],
+        [], ['Estimated head at Shutoff (m)', num(r.tdh*(r.shutoffRatio/100))]];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s5), 'Pump Head Estimation');
+    }
+
+    // --- Sheet 6+: Control Valve Datasheet(s) ---
+    const valveIdxs = []; nodes.forEach((nd,i)=>{ if (nd.type==='valve') valveIdxs.push(i); });
+    valveIdxs.forEach((idx, vi) => {
+      const nd = nodes[idx];
+      const tag = (nd.tag && nd.tag.tag) ? nd.tag.tag : ('Valve_' + (idx+1));
+      const side = (idx < pumpIdx) ? 'suction' : 'discharge';
+      const zone = getZone(nodeZone(idx));
+      const rho = parseFloat(zone.density);
+      // Re-derive per-case values the same way controlValveDatasheetHtml does.
+      const normalLineFlow = computeFlowMapForBase('flow');
+      const disRho2 = parseFloat(getZone(nodeZone(nodes.length-1)).density) || null;
+      const elevPump2 = parseFloat(pumpNode.data.elevation) || 0;
+      const g2 = 9.81;
+      const elevValveRaw = parseFloat(nd.data.elevation);
+      const elevValve = isNaN(elevValveRaw) ? elevPump2 : elevValveRaw;
+      const ownDpNormal = parseFloat(nd.data.dp) || 0;
+      function frictionSum2(fromLineIdx, toIdx, fromNodeIdx, normalArr, caseArr) {
+        let cum = 0;
+        for (let k = fromLineIdx; k < toIdx; k++) {
+          const nfk = normalArr[k], cfk = caseArr[k];
+          if (!nfk || isNaN(nfk) || cfk===null || cfk===undefined || isNaN(cfk)) return null;
+          const sc = (cfk/nfk)*(cfk/nfk);
+          const rr = computeLineResult(lines[k], getZone(lineZone(k)));
+          if (!rr.ok) return null;
+          cum += rr.dpBar * sc;
+        }
+        for (let i2 = fromNodeIdx; i2 < toIdx; i2++) {
+          const nd2 = nodes[i2];
+          const nfk = nodeLocalFlow(i2, normalArr), cfk = nodeLocalFlow(i2, caseArr);
+          if (nfk===null || !nfk || cfk===null) return null;
+          const sc = (cfk/nfk)*(cfk/nfk);
+          if (EQUIP_DP_TYPES.includes(nd2.type)) cum += (parseFloat(nd2.data.dp)||0)*sc;
+          else if (nd2.type==='reducer'||nd2.type==='enlarger') { const tr = computeTransitionDp(nd2,i2); if(!tr.ok) return null; cum += tr.dpBar*sc; }
+        }
+        return cum;
+      }
+      const rowsData = cases.map(c => {
+        const caseLineFlow = computeFlowMapForBase(c.key);
+        const localFlow = nodeLocalFlow(idx, caseLineFlow);
+        const caseR = (c.key === 'flow') ? r : computeCaseSummary(c.key, r);
+        let inletP=null, outletP=null, valveDp=null, cv=null;
+        if (side === 'discharge') {
+          const pumpOutlet = (caseR && caseR.ok && caseR.suctionPress!==null && caseR.pumpDpCalc!==null) ? caseR.suctionPress+caseR.pumpDpCalc : null;
+          const fricA = frictionSum2(pumpIdx, idx, pumpIdx+1, normalLineFlow, caseLineFlow);
+          if (pumpOutlet!==null && fricA!==null && disRho2!==null) inletP = pumpOutlet - (disRho2*g2*(elevValve-elevPump2))/1e5 - fricA;
+          const elevDest = r.governingDischargeElev;
+          const fricB = frictionSum2(idx+1, nodes.length-1, idx+1, normalLineFlow, caseLineFlow);
+          const destOpPress = parseFloat(nodes[nodes.length-1].data.opress);
+          if (!isNaN(destOpPress) && fricB!==null && disRho2!==null) outletP = destOpPress + (disRho2*g2*(elevDest-elevValve))/1e5 + fricB;
+          if (inletP!==null && outletP!==null) valveDp = inletP-outletP;
+        } else {
+          const nf = nodeLocalFlow(idx, normalLineFlow);
+          const scale = (nf && localFlow!==null) ? (localFlow/nf)*(localFlow/nf) : null;
+          valveDp = (scale!==null) ? ownDpNormal*scale : null;
+          const fricA = frictionSum2(0, idx, 1, normalLineFlow, caseLineFlow);
+          const srcP = parseFloat(nodes[0].data.opress);
+          if (!isNaN(srcP) && fricA!==null) inletP = srcP - fricA;
+          if (inletP!==null && valveDp!==null) outletP = inletP-valveDp;
+        }
+        if (localFlow && valveDp && valveDp>0 && rho) cv = computeValveCv(localFlow, valveDp, rho);
+        return {label:c.label, flow:localFlow, inletP, outletP, dp:valveDp, cv};
+      });
+      const s6 = [['CONTROL VALVE PROCESS DATASHEET \u2014 ' + tag + ' (' + side + ' side)'], ['', ...rowsData.map(x=>x.label)],
+        ['Flow (m3/h)', ...rowsData.map(x=>num(x.flow))],
+        ['Inlet pressure (bara)', ...rowsData.map(x=>num(x.inletP))],
+        ['Outlet pressure (bara)', ...rowsData.map(x=>num(x.outletP))],
+        ['Valve dP (bar)', ...rowsData.map(x=>num(x.dp))],
+        ['Cv (approx.)', ...rowsData.map(x=>num(x.cv))]];
+      const sheetName = ('CV ' + tag).substring(0,31) || ('CV_' + (vi+1));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s6), sheetName);
+    });
+  }
+
+  const fname = 'SEZTools_Pump_' + (pumpNode.tag && pumpNode.tag.tag ? pumpNode.tag.tag : 'export') + '.xlsx';
+  XLSX.writeFile(wb, fname);
 };
 
 render();
