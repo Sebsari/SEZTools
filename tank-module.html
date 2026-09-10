@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SEZTools - Tank Sizing</title>
+<link rel="icon" href="icon-192.png"/>
+<script src="vendor/xlsx.full.min.js"></script>
+<style>
+  @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('vendor/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');}
+  @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:600;font-display:swap;src:url('vendor/fonts/jetbrains-mono-latin-600-normal.woff2') format('woff2');}
+  @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:700;font-display:swap;src:url('vendor/fonts/jetbrains-mono-latin-700-normal.woff2') format('woff2');}
+  :root {
+    --surface-1: #F3F5F7;
+    --surface-2: #FFFFFF;
+    --border: #C7CDD3;
+    --border-strong: #9AA3AA;
+    --text-primary: #1E2A33;
+    --text-secondary: #4A5A63;
+    --text-muted: #8A9AA3;
+    --text-accent: #0B5FA5;
+    --warn: #A67A1E;
+    --err: #9C3A32;
+    --r-sm: 6px;
+    --r-md: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    background: #E7EBEF;
+    color: var(--text-primary);
+    margin: 0;
+    padding: 20px;
+    line-height: 1.5;
+  }
+  .app-shell { max-width: 920px; margin: 0 auto; }
+  button {
+    font-family: inherit;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    color: var(--text-primary);
+  }
+  button:hover:not(:disabled) { border-color: var(--text-accent); color: var(--text-accent); }
+  input, select {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+    color: var(--text-primary);
+  }
+  input:focus, select:focus { outline: none; border-color: var(--text-accent); }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+  h1 { font-size: 13px; font-weight: 700; letter-spacing: .5px; margin: 0 0 4px; text-transform: uppercase; color: var(--text-secondary); }
+  .subtitle { font-size: 12px; color: var(--text-muted); margin: 0 0 20px; }
+  .section-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .5px; margin: 22px 0 10px; }
+  .field-grid { display: flex; flex-wrap: wrap; gap: 12px 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 170px; max-width: 230px; }
+  .field label { font-size: 11px; color: var(--text-secondary); }
+  .field .hint { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .field-row { display: flex; gap: 6px; align-items: center; }
+  .field-row select { flex-shrink: 0; }
+  .panel { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem; margin-top: 1rem; }
+  table.results { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.results td, table.results th { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+  table.results th { color: var(--text-secondary); font-weight: 600; width: 46%; }
+  table.results td.val { text-align: right; font-weight: 600; }
+  table.results tr.hl td { color: var(--text-accent); }
+  .flag { display:inline-block; font-size:10px; color: var(--warn); margin-left:6px; }
+  .status-box { margin-top: 1rem; font-size: 13px; padding: 10px 14px; border-radius: 8px; }
+  .status-ok { background: rgba(37,99,57,.08); color: #256339; }
+  .status-err { background: rgba(156,58,50,.08); color: var(--err); }
+  @media print {
+    body * { visibility: hidden; }
+    #print-report, #print-report * { visibility: visible; }
+    #print-report { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+    @page { size: A4; margin: 12mm; }
+  }
+  #print-report { display: none; font-family: Arial, Helvetica, sans-serif; color: #111; }
+  #print-report table { border-collapse: collapse; width: 100%; font-size: 10px; }
+  #print-report td, #print-report th { border: 1px solid #999; padding: 3px 6px; text-align: left; }
+  #print-report .rpt-section-title { background: #dfe3ea; font-weight: 700; font-size: 11px; padding: 4px 6px; margin-top: 10px; border: 1px solid #999; }
+  #print-report h2 { font-size: 13px; margin: 8px 0 4px; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <div style="display:flex; align-items:baseline; gap:14px; padding:10px 0 8px; border-bottom:1px solid var(--border); margin-bottom:12px;">
+    <div style="font-size:12px; font-weight:700; color:var(--text-accent); background:rgba(11,95,165,.08); padding:3px 9px; border-radius:var(--r-sm); letter-spacing:1px;">SEZTools</div>
+    <div style="font-size:14px; font-weight:600; color:var(--text-primary);">Tank Sizing</div>
+  </div>
+
+  <div style="display:flex; gap:6px; margin-bottom:16px;">
+    <button class="tab-btn active" data-tab="tab-hd" style="font-size:12px; font-weight:600; padding:7px 14px;">Height &amp; Diameter</button>
+    <button class="tab-btn" data-tab="tab-vent" style="font-size:12px; font-weight:600; padding:7px 14px;">Venting</button>
+  </div>
+
+  <div id="tab-hd" class="tab-pane">
+  <p class="subtitle">Height &amp; Diameter determination for vertical (fixed/cone-roof) storage tanks, based on a standard capacity-vs-height/diameter sizing table.</p>
+
+  <div class="section-title">Input Data</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Net working capacity</label>
+      <div class="field-row">
+        <input type="number" id="v1" value="6000" step="any">
+        <select id="v1Unit">
+          <option value="bbl" selected>barrel</option>
+          <option value="m3">m³</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Outlet line diameter (d1)</label>
+      <div class="field-row"><input type="number" id="d1" value="12" step="any"><span class="hint" style="flex-shrink:0">in</span></div>
+    </div>
+    <div class="field">
+      <label>Overflow line diameter (d2)</label>
+      <div class="field-row"><input type="number" id="d2" value="0" step="any"><span class="hint" style="flex-shrink:0">in</span></div>
+      <div class="hint">leave 0 if no overflow line</div>
+    </div>
+    <div class="field">
+      <label>Draw off flowrate (Q2)</label>
+      <div class="field-row"><input type="number" id="q2" value="400" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+    <div class="field">
+      <label>Filling flowrate (Q1) — optional</label>
+      <div class="field-row"><input type="number" id="q1" value="400" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+      <div class="hint">for record/report only, not used in this calc</div>
+    </div>
+    <div class="field">
+      <label>Max operating density — optional</label>
+      <div class="field-row"><input type="number" id="dmax" value="" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+      <div class="hint">for record/report only, not used in this calc</div>
+    </div>
+  </div>
+
+  <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
+    <button id="calc-btn" style="font-size:13px; padding:8px 18px; font-weight:600;">Calculate</button>
+  </div>
+
+  <div id="status-panel"></div>
+  <div id="results-panel"></div>
+
+  <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
+    <button id="pdf-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);" disabled>Export PDF</button>
+    <button id="excel-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);" disabled>Export Excel</button>
+  </div>
+  </div>
+
+  <div id="tab-vent" class="tab-pane" style="display:none;">
+  <p class="subtitle">Normal in/out-breathing venting requirements per API 2000 (7th Ed.), §3.3.2 — liquid-movement and thermal breathing, SI units.</p>
+
+  <div class="section-title">Filling / Discharge</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Liquid type</label>
+      <select id="vLiqType">
+        <option value="nonvolatile" selected>Nonvolatile (vapor pressure ≤ 5.0 kPa)</option>
+        <option value="volatile">Volatile (vapor pressure &gt; 5.0 kPa)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Max filling rate (Vpf)</label>
+      <div class="field-row"><input type="number" id="vVpf" value="400" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+    <div class="field">
+      <label>Max discharge rate (Vpe)</label>
+      <div class="field-row"><input type="number" id="vVpe" value="400" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+  </div>
+
+  <div class="section-title">Thermal Breathing</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Tank volume (Vtk)</label>
+      <div class="field-row"><input type="number" id="vVtk" value="1089" step="any"><span class="hint" style="flex-shrink:0">m³</span></div>
+      <div class="hint">use the Nominal Capacity from Height &amp; Diameter</div>
+    </div>
+    <div class="field">
+      <label>Latitude</label>
+      <select id="vLat">
+        <option value="0.32|4|6.5|4|6.5" selected>Below 42°</option>
+        <option value="0.25|3|5|5|5">Between 42° and 58°</option>
+        <option value="0.2|2.5|4|4|4">Above 58°</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Vapor pressure class</label>
+      <select id="vVapClass">
+        <option value="hexane" selected>Similar to hexane</option>
+        <option value="higher">Higher than hexane / unknown</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Average storage temperature</label>
+      <select id="vTempClass">
+        <option value="lt25" selected>&lt; 25 °C</option>
+        <option value="ge25">&ge; 25 °C</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-title">Insulation Reduction Factor (Ri)</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Insulation</label>
+      <select id="vInsType">
+        <option value="none" selected>None (Ri = 1)</option>
+        <option value="full">Fully insulated</option>
+        <option value="partial">Partially insulated</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Inside heat-transfer coeff. (h)</label>
+      <div class="field-row"><input type="number" id="vH" value="4" step="any"><span class="hint" style="flex-shrink:0">W/m²·K</span></div>
+    </div>
+    <div class="field">
+      <label>Insulation thickness (lin)</label>
+      <div class="field-row"><input type="number" id="vLin" value="0.1" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
+    </div>
+    <div class="field">
+      <label>Insulation conductivity (λin)</label>
+      <div class="field-row"><input type="number" id="vLam" value="0.05" step="any"><span class="hint" style="flex-shrink:0">W/m·K</span></div>
+    </div>
+    <div class="field">
+      <label>Total tank surface area (ATTS) — partial only</label>
+      <div class="field-row"><input type="number" id="vAtts" value="" step="any"><span class="hint" style="flex-shrink:0">m²</span></div>
+    </div>
+    <div class="field">
+      <label>Insulated surface area (Ainp) — partial only</label>
+      <div class="field-row"><input type="number" id="vAinp" value="" step="any"><span class="hint" style="flex-shrink:0">m²</span></div>
+    </div>
+  </div>
+
+  <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
+    <button id="vent-calc-btn" style="font-size:13px; padding:8px 18px; font-weight:600;">Calculate</button>
+  </div>
+
+  <div id="vent-status-panel"></div>
+  <div id="vent-results-panel"></div>
+
+  <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
+    <button id="vent-excel-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);" disabled>Export Excel</button>
+  </div>
+  </div>
+
+  <div id="print-report"></div>
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).style.display = '';
+  };
+});
+</script>
+<style>
+  .tab-btn { border-radius: var(--r-sm); }
+  .tab-btn.active { background: var(--text-accent); color: #fff; border-color: var(--text-accent); }
+</style>
+
+<script>
+// ---- Sizing Table (Kalatjari method) ----
+// Fixed capacity-vs-height/diameter matrix, m3, rows = height 1..25 m, columns = diameter (m)
+const DIAMS = [3,4,6,8,10,12.5,15,17.5,20,22.5,25,27.5,30,33,36,39,42,45,48,51,54,57,60,66,72,78,84,90,96,102,108,114];
+const TABLE = [
+[7,12,28,50,78,122,176,240,314,397,490,593,706,855,1017,1194,1385,1590,1809,2042,2290,2551,2827,3421,4071,4778,5541,6361,7238,8171,9150,10202],
+[14,25,56,100,157,245,353,481,628,795,981,1187,1413,1710,2035,2389,2770,3180,3619,4085,4580,5103,5654,6842,8142,9556,11083,12723,14476,16342,10312,20404],
+[21,37,84,150,235,358,530,721,942,1192,1472,1781,2120,2565,3053,3583,4156,4771,5428,6128,6870,7655,8482,10263,12214,14335,16625,19085,21714,24513,28468,30606],
+[28,50,113,201,314,490,706,962,1256,1590,1963,2375,2827,3421,4071,4778,5541,6361,7238,8171,9160,10207,11309,13684,16285,19113,22167,25446,25952,32685,36624,40806],
+[35,62,141,251,392,613,883,1202,1570,1988,2454,2969,3534,4276,5089,5972,6927,7952,9047,10214,11451,12758,14137,17105,20357,23891,27708,31808,36191,40856,45780,51010],
+[42,75,169,301,471,736,1060,1443,1884,2385,2945,3563,4241,5131,6107,7167,8312,9542,10857,12256,13741,15310,16964,20527,24428,28670,33250,38170,43429,49027,54936,61212],
+[0,87,197,351,549,859,1237,1683,2199,2783,3436,4157,4948,5987,7125,8362,9698,11133,12666,14299,16031,17882,19792,23948,28500,33448,38792,44532,50667,57198,63092,71414],
+[0,100,226,402,628,981,1413,1924,2513,3180,3926,4751,5654,6842,8142,9556,11083,12723,14476,16342,18321,20414,22619,27369,32571,38226,44334,50893,57905,65370,73240,81616],
+[0,0,254,452,706,1104,1590,2164,2827,3578,4417,5345,6361,7697,9160,10751,12468,14313,16285,18385,20611,22965,25446,30790,35643,43005,49875,57255,65143,73541,82404,91818],
+[0,0,282,502,785,1227,1767,2405,3141,3976,4908,5939,7068,8552,10178,11945,13854,15904,18095,20428,22902,25517,28274,34211,40714,47783,55417,63617,72382,81712,91560,102020],
+[0,0,0,552,863,1349,1943,2645,3455,4373,5399,6533,7775,9409,11196,13140,15239,17494,19905,22470,25192,23069,31101,37633,44786,52561,60959,69978,79620,89883,100716,112222],
+[0,0,0,603,942,1472,2120,2886,3769,4771,5890,7127,8482,10263,12214,14335,16625,19085,21714,24513,27482,30821,33929,41054,48857,57340,66501,76340,85858,98055,109872,122424],
+[0,0,0,0,1021,1595,2297,3126,4084,5168,6381,7721,9189,11118,13232,15529,18010,20675,23524,26556,29772,33172,36756,44475,52929,62118,72042,82702,94096,106226,119028,132626],
+[0,0,0,0,1099,1718,2474,3367,4398,5566,6872,8315,9896,11974,14250,16724,19395,22266,25333,28599,32063,35724,39584,47896,57000,65896,77584,89064,101335,114397,128184,142828],
+[0,0,0,0,1178,1840,2650,3607,4712,5964,7363,8909,10602,12829,15268,17918,20781,23856,27140,30642,34353,38278,42411,51317,61072,71675,83126,95425,108573,122569,137340,153030],
+[0,0,0,0,1256,1963,2827,3848,5026,6361,7853,9503,11309,13684,16285,19113,22167,25448,28952,32685,36643,40828,45238,54739,65143,76453,88668,101787,115811,130740,145496,163232],
+[0,0,0,0,0,2086,3004,4088,5340,6759,8344,10097,12016,14540,17303,20308,23552,27037,30762,34727,38933,43379,48066,58160,69215,81232,94209,108149,123049,138911,155662,173434],
+[0,0,0,0,0,2208,3180,4329,5654,7156,8835,10691,12723,15395,18321,21502,24937,28627,32571,36770,41223,45931,50893,61581,73286,86010,99751,114510,130287,147082,164808,183636],
+[0,0,0,0,0,2331,3357,4570,5969,7554,9326,11285,13430,16250,19339,22697,25323,30218,34381,38813,43514,48480,53721,65002,77358,90788,105293,120672,137526,155254,173964,0],
+[0,0,0,0,0,2454,3534,4810,6283,7952,9817,11879,14137,17105,20357,23891,27708,31808,36191,40850,45804,51035,56548,68422,81429,95507,110835,127234,144764,163425,0,0],
+[0,0,0,0,0,0,3711,5051,6597,8349,10308,12473,14844,17961,21375,25086,29094,33399,38000,42899,48094,53585,59378,71844,85501,100345,116377,132590,152032,171596,0,0],
+[0,0,0,0,0,0,3887,5291,6911,8747,10799,13067,15550,18816,22393,25280,30479,34989,39810,44941,50364,55138,62203,73266,89572,105123,121918,139951,159242,0,0,0],
+[0,0,0,0,0,0,4064,5532,7225,9144,11290,13661,16257,19671,23411,27475,31865,36579,41619,40984,52573,58690,65030,78687,93644,109902,127460,140019,166479,0,0,0],
+[0,0,0,0,0,0,4241,5772,7539,9542,11780,14254,16964,20527,24428,28670,33250,38170,43429,49027,54955,61242,67858,82108,97715,114680,133032,0,0,0,0,0],
+[0,0,0,0,0,0,4417,6013,7853,9940,12271,14848,17671,21382,25446,29864,34636,39760,45239,51070,57256,62793,70685,85529,101787,119458,138544,0,0,0,0,0]
+];
+
+// Search: smallest table capacity exceeding V1 (columns ascending by diameter,
+// rows ascending by height within each column), accepted once the real
+// geometric nominal capacity computed for that H,D comes out below the
+// table's listed value. Faithful port of the source workbook's VBA macro.
+function findSize(V1, d1, d2, q2){
+  let last = null;
+  for (let j = 0; j < DIAMS.length; j++){
+    for (let i = 0; i < TABLE.length; i++){
+      const cap = TABLE[i][j];
+      if (cap > V1){
+        const D = DIAMS[j], H = i + 1;
+        const geo = computeGeometry(D, H, V1, d1, d2, q2);
+        last = { D, H, Vtable: cap, ...geo };
+        if (geo.V < cap) return last;
+      }
+    }
+  }
+  return last; // null if V1 exceeds the whole table's range
+}
+
+// Freeboard / nominal-capacity chain, ported directly from the "Height & Diameter"
+// sheet's formulas (Z31-Z42). The source workbook's own Z36 (Nominal Capacity)
+// formula had a copy/paste bug: it compared H2 and ht against a threshold of 24"
+// for BOTH terms, instead of each term's own proper minimum-size threshold (18"
+// for H2, 4" for ht — the thresholds its own AC33/AC34 "considered" notes
+// correctly use). Fixed here to use each term's own threshold.
+function computeGeometry(D, H, V1, d1, d2, q2){
+  const h_in = d1 + 5;
+  const H1_in = h_in + 1.5 * d1;                 // raw, not clamped at this point
+  const H2_in = 1.5 * d2;                        // raw
+  const ht_in = (0.04 * V1) / (3.14 * D * D) / 0.0254; // raw
+  const V2 = (q2 / 60) * 3;
+
+  const H1_used = Math.max(H1_in, 24);
+  const H2_used = Math.max(H2_in, 18);
+  const ht_used = Math.max(ht_in, 4);
+
+  const V = ((H1_used + H2_used + ht_used) * 0.0254 * 3.14 * D * D) / 4 + V1 + V2;
+  const hw = (4 * V1) / (3.14 * D * D);
+  const hb_raw = (0.2 * q2) / (3.14 * D * D);
+  const hb = Math.max(hb_raw, 0.15);
+
+  const HHLL = H - H2_used * 0.0254;
+  const HLL = HHLL - ht_used * 0.0254;
+  const LLLL = H1_used * 0.0254;
+  const LLL = LLLL + hb;
+
+  return {
+    h_in, H1_in, H2_in, ht_in, H1_used, H2_used, ht_used,
+    H1_flag: H1_in < 24, H2_flag: H2_in < 18, ht_flag: ht_in < 4, hb_flag: hb_raw < 0.15,
+    V2, V, hw, hb, HHLL, HLL, LLLL, LLL
+  };
+}
+
+function fmt(x, d=2){ return (Math.round(x * Math.pow(10,d)) / Math.pow(10,d)).toLocaleString(); }
+
+let lastResult = null, lastInputs = null;
+
+document.getElementById('calc-btn').onclick = () => {
+  const v1raw = parseFloat(document.getElementById('v1').value);
+  const v1unit = document.getElementById('v1Unit').value;
+  const d1 = parseFloat(document.getElementById('d1').value);
+  const d2 = parseFloat(document.getElementById('d2').value) || 0;
+  const q2 = parseFloat(document.getElementById('q2').value);
+  const q1 = parseFloat(document.getElementById('q1').value) || null;
+  const dmax = parseFloat(document.getElementById('dmax').value) || null;
+
+  const statusEl = document.getElementById('status-panel');
+  const resultsEl = document.getElementById('results-panel');
+  const pdfBtn = document.getElementById('pdf-btn'), excelBtn = document.getElementById('excel-btn');
+
+  if (isNaN(v1raw) || v1raw <= 0 || isNaN(d1) || d1 <= 0 || isNaN(q2) || q2 <= 0){
+    statusEl.innerHTML = '<div class="status-box status-err">Fill in net working capacity, outlet line diameter and draw off flowrate (all &gt; 0).</div>';
+    resultsEl.innerHTML = '';
+    pdfBtn.disabled = true; excelBtn.disabled = true;
+    lastResult = null;
+    return;
+  }
+
+  const V1 = v1unit === 'bbl' ? v1raw * 0.158987 : v1raw;
+  const res = findSize(V1, d1, d2, q2);
+
+  if (!res){
+    statusEl.innerHTML = '<div class="status-box status-err">Required capacity exceeds the sizing table\'s range (max ~183,600 m³ at D=114m/H=18m). No standard size found.</div>';
+    resultsEl.innerHTML = '';
+    pdfBtn.disabled = true; excelBtn.disabled = true;
+    lastResult = null;
+    return;
+  }
+
+  lastResult = res;
+  lastInputs = { v1raw, v1unit, V1, d1, d2, q2, q1, dmax };
+
+  statusEl.innerHTML = '<div class="status-box status-ok">Sizing complete.</div>';
+  resultsEl.innerHTML = renderResults(res);
+  pdfBtn.disabled = false; excelBtn.disabled = false;
+};
+
+function flagHtml(considered, text){ return considered ? `<span class="flag">(${text} considered)</span>` : ''; }
+
+function renderResults(r){
+  return `<div class="panel">
+    <div class="section-title" style="margin-top:0">Selected Size</div>
+    <table class="results">
+      <tr class="hl"><th>Selected Diameter (D)</th><td class="val">${fmt(r.D,2)} m</td></tr>
+      <tr class="hl"><th>Selected Height (H)</th><td class="val">${fmt(r.H,2)} m</td></tr>
+      <tr><th>Capacity from Sizing Table</th><td class="val">${fmt(r.Vtable,0)} m³</td></tr>
+      <tr class="hl"><th>Computed Nominal Capacity (V)</th><td class="val">${fmt(r.V,1)} m³</td></tr>
+    </table>
+    <div class="section-title">Freeboard / Dead-space</div>
+    <table class="results">
+      <tr><th>h = d1 + 5"</th><td class="val">${fmt(r.h_in,2)} in</td></tr>
+      <tr><th>H1 (tank dead height)</th><td class="val">${fmt(r.H1_used,2)} in ${flagHtml(r.H1_flag,'24"')}</td></tr>
+      <tr><th>H2 (HHLL to top)</th><td class="val">${fmt(r.H2_used,2)} in ${flagHtml(r.H2_flag,'18"')}</td></tr>
+      <tr><th>ht (HHLL to HLL)</th><td class="val">${fmt(r.ht_used,2)} in ${flagHtml(r.ht_flag,'4"')}</td></tr>
+      <tr><th>hw</th><td class="val">${fmt(r.hw,3)} m</td></tr>
+      <tr><th>hb</th><td class="val">${fmt(r.hb,3)} m ${flagHtml(r.hb_flag,'150mm')}</td></tr>
+      <tr><th>V2 (3-min draw-off volume)</th><td class="val">${fmt(r.V2,2)} m³</td></tr>
+    </table>
+    <div class="section-title">Operating Levels (from tank bottom)</div>
+    <table class="results">
+      <tr class="hl"><th>HHLL</th><td class="val">${fmt(r.HHLL,3)} m</td></tr>
+      <tr class="hl"><th>HLL</th><td class="val">${fmt(r.HLL,3)} m</td></tr>
+      <tr class="hl"><th>LLL</th><td class="val">${fmt(r.LLL,3)} m</td></tr>
+      <tr class="hl"><th>LLLL</th><td class="val">${fmt(r.LLLL,3)} m</td></tr>
+    </table>
+  </div>`;
+}
+
+document.getElementById('pdf-btn').onclick = () => {
+  if (!lastResult) return;
+  const r = lastResult, inp = lastInputs;
+  document.getElementById('print-report').innerHTML = `
+    <h2>SEZTools &mdash; Tank Sizing Report</h2>
+    <div class="rpt-section-title">1. INPUT DATA</div>
+    <table>
+      <tr><td>Net working capacity (V1)</td><td>${fmt(inp.v1raw,2)} ${inp.v1unit} (${fmt(inp.V1,2)} m³)</td></tr>
+      <tr><td>Outlet line diameter (d1)</td><td>${fmt(inp.d1,2)} in</td></tr>
+      <tr><td>Overflow line diameter (d2)</td><td>${fmt(inp.d2,2)} in</td></tr>
+      <tr><td>Draw off flowrate (Q2)</td><td>${fmt(inp.q2,2)} m³/hr</td></tr>
+      ${inp.q1 ? `<tr><td>Filling flowrate (Q1)</td><td>${fmt(inp.q1,2)} m³/hr</td></tr>` : ''}
+      ${inp.dmax ? `<tr><td>Max operating density</td><td>${fmt(inp.dmax,2)} kg/m³</td></tr>` : ''}
+    </table>
+    <div class="rpt-section-title">2. SELECTED SIZE</div>
+    <table>
+      <tr><td>Selected Diameter</td><td>${fmt(r.D,2)} m</td></tr>
+      <tr><td>Selected Height</td><td>${fmt(r.H,2)} m</td></tr>
+      <tr><td>Capacity from Sizing Table</td><td>${fmt(r.Vtable,0)} m³</td></tr>
+      <tr><td>Computed Nominal Capacity</td><td>${fmt(r.V,1)} m³</td></tr>
+    </table>
+    <div class="rpt-section-title">3. OPERATING LEVELS</div>
+    <table>
+      <tr><td>HHLL</td><td>${fmt(r.HHLL,3)} m</td></tr>
+      <tr><td>HLL</td><td>${fmt(r.HLL,3)} m</td></tr>
+      <tr><td>LLL</td><td>${fmt(r.LLL,3)} m</td></tr>
+      <tr><td>LLLL</td><td>${fmt(r.LLLL,3)} m</td></tr>
+    </table>`;
+  window.print();
+  document.getElementById('print-report').innerHTML = '';
+};
+
+document.getElementById('excel-btn').onclick = () => {
+  if (!lastResult) return;
+  const r = lastResult, inp = lastInputs;
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ['SEZTools - Tank Sizing Report'],
+    [],
+    ['Input Data'],
+    ['Net working capacity (V1)', `${inp.v1raw} ${inp.v1unit}`, `${inp.V1.toFixed(2)} m3`],
+    ['Outlet line diameter (d1)', inp.d1, 'in'],
+    ['Overflow line diameter (d2)', inp.d2, 'in'],
+    ['Draw off flowrate (Q2)', inp.q2, 'm3/hr'],
+    ['Filling flowrate (Q1)', inp.q1 || '', 'm3/hr'],
+    ['Max operating density', inp.dmax || '', 'kg/m3'],
+    [],
+    ['Selected Size'],
+    ['Selected Diameter', r.D, 'm'],
+    ['Selected Height', r.H, 'm'],
+    ['Capacity from Sizing Table', r.Vtable, 'm3'],
+    ['Computed Nominal Capacity', r.V.toFixed(1), 'm3'],
+    [],
+    ['Operating Levels'],
+    ['HHLL', r.HHLL.toFixed(3), 'm'],
+    ['HLL', r.HLL.toFixed(3), 'm'],
+    ['LLL', r.LLL.toFixed(3), 'm'],
+    ['LLLL', r.LLLL.toFixed(3), 'm']
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Tank Sizing');
+  XLSX.writeFile(wb, 'tank-sizing-report.xlsx');
+};
+
+// ---- Normal Venting (API 2000 7th Ed., 3.3.2 — Equations 1-13) ----
+let lastVentResult = null;
+
+function computeNormalVenting(p){
+  // Filling / discharge (Eq 1, 3, 5)
+  const Vop = p.liqType === 'volatile' ? 2.0 * p.Vpf : p.Vpf;
+  const Vip = p.Vpe;
+
+  // Thermal breathing (Eq 7, 9)
+  const VOT_raw = p.Y * Math.pow(p.Vtk, 0.9);
+  const VIT_raw = p.C * Math.pow(p.Vtk, 0.7);
+
+  // Insulation reduction factor Ri (Eq 11, 12)
+  let Ri = 1, Rin = null, Rinp = null;
+  if (p.insType === 'full' || p.insType === 'partial'){
+    Rin = 1 / (1 + (p.h * p.lin) / p.lam);
+    Ri = Rin;
+  }
+  if (p.insType === 'partial'){
+    Rinp = (p.Ainp / p.ATTS) * Rin + (1 - p.Ainp / p.ATTS);
+    Ri = Rinp;
+  }
+
+  const VOT = VOT_raw * Ri;
+  const VIT = VIT_raw * Ri;
+
+  return {
+    Vop, Vip, VOT_raw, VIT_raw, Ri, Rin, Rinp, VOT, VIT,
+    totalOut: Vop + VOT,
+    totalIn: Vip + VIT
+  };
+}
+
+document.getElementById('vent-calc-btn').onclick = () => {
+  const liqType = document.getElementById('vLiqType').value;
+  const Vpf = parseFloat(document.getElementById('vVpf').value);
+  const Vpe = parseFloat(document.getElementById('vVpe').value);
+  const Vtk = parseFloat(document.getElementById('vVtk').value);
+  const [Y, Chex_lt25, Chex_ge25, Chi_lt25, Chi_ge25] = document.getElementById('vLat').value.split('|').map(Number);
+  const vapClass = document.getElementById('vVapClass').value;
+  const tempClass = document.getElementById('vTempClass').value;
+  const insType = document.getElementById('vInsType').value;
+  const h = parseFloat(document.getElementById('vH').value);
+  const lin = parseFloat(document.getElementById('vLin').value);
+  const lam = parseFloat(document.getElementById('vLam').value);
+  const ATTS = parseFloat(document.getElementById('vAtts').value);
+  const Ainp = parseFloat(document.getElementById('vAinp').value);
+
+  const statusEl = document.getElementById('vent-status-panel');
+  const resultsEl = document.getElementById('vent-results-panel');
+  const excelBtn = document.getElementById('vent-excel-btn');
+
+  if (isNaN(Vpf) || Vpf < 0 || isNaN(Vpe) || Vpe < 0 || isNaN(Vtk) || Vtk <= 0){
+    statusEl.innerHTML = '<div class="status-box status-err">Fill in filling rate, discharge rate and tank volume (volume &gt; 0).</div>';
+    resultsEl.innerHTML = '';
+    excelBtn.disabled = true; lastVentResult = null;
+    return;
+  }
+  if (insType === 'partial' && (isNaN(ATTS) || ATTS <= 0 || isNaN(Ainp) || Ainp < 0 || Ainp > ATTS)){
+    statusEl.innerHTML = '<div class="status-box status-err">For a partially insulated tank, enter ATTS &gt; 0 and 0 &le; Ainp &le; ATTS.</div>';
+    resultsEl.innerHTML = '';
+    excelBtn.disabled = true; lastVentResult = null;
+    return;
+  }
+
+  // C-factor: rows are hexane/higher x <25/>=25, per Table 2
+  let C;
+  if (vapClass === 'hexane') C = tempClass === 'lt25' ? Chex_lt25 : Chex_ge25;
+  else C = tempClass === 'lt25' ? Chi_lt25 : Chi_ge25;
+
+  const res = computeNormalVenting({ liqType, Vpf, Vpe, Vtk, Y, C, insType, h, lin, lam, ATTS, Ainp });
+  lastVentResult = { ...res, inputs: { liqType, Vpf, Vpe, Vtk, Y, C, insType, h, lin, lam, ATTS, Ainp } };
+
+  statusEl.innerHTML = '<div class="status-box status-ok">Normal venting requirements calculated (air-equivalent, Nm³/hr).</div>';
+  resultsEl.innerHTML = `<div class="panel">
+    <div class="section-title" style="margin-top:0">Out-breathing</div>
+    <table class="results">
+      <tr><th>Due to filling (Vop)</th><td class="val">${fmt(res.Vop,1)} Nm³/hr</td></tr>
+      <tr><th>Thermal (VOT)</th><td class="val">${fmt(res.VOT,1)} Nm³/hr</td></tr>
+      <tr class="hl"><th>Total required out-breathing</th><td class="val">${fmt(res.totalOut,1)} Nm³/hr</td></tr>
+    </table>
+    <div class="section-title">In-breathing</div>
+    <table class="results">
+      <tr><th>Due to discharge (Vip)</th><td class="val">${fmt(res.Vip,1)} Nm³/hr</td></tr>
+      <tr><th>Thermal (VIT)</th><td class="val">${fmt(res.VIT,1)} Nm³/hr</td></tr>
+      <tr class="hl"><th>Total required in-breathing</th><td class="val">${fmt(res.totalIn,1)} Nm³/hr</td></tr>
+    </table>
+    <div class="section-title">Factors used</div>
+    <table class="results">
+      <tr><th>Y (latitude)</th><td class="val">${Y}</td></tr>
+      <tr><th>C (vapor pressure/temp/latitude)</th><td class="val">${C}</td></tr>
+      <tr><th>Ri (insulation reduction)</th><td class="val">${fmt(res.Ri,3)}</td></tr>
+    </table>
+  </div>`;
+  excelBtn.disabled = false;
+};
+
+document.getElementById('vent-excel-btn').onclick = () => {
+  if (!lastVentResult) return;
+  const r = lastVentResult, inp = r.inputs;
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ['SEZTools - Normal Venting Report (API 2000, 3.3.2)'],
+    [],
+    ['Input Data'],
+    ['Liquid type', inp.liqType],
+    ['Max filling rate (Vpf)', inp.Vpf, 'm3/hr'],
+    ['Max discharge rate (Vpe)', inp.Vpe, 'm3/hr'],
+    ['Tank volume (Vtk)', inp.Vtk, 'm3'],
+    ['Y-factor', inp.Y],
+    ['C-factor', inp.C],
+    ['Insulation', inp.insType],
+    [],
+    ['Results (Nm3/hr air-equivalent)'],
+    ['Vop (filling)', r.Vop.toFixed(1)],
+    ['VOT (thermal out)', r.VOT.toFixed(1)],
+    ['Total out-breathing', r.totalOut.toFixed(1)],
+    ['Vip (discharge)', r.Vip.toFixed(1)],
+    ['VIT (thermal in)', r.VIT.toFixed(1)],
+    ['Total in-breathing', r.totalIn.toFixed(1)],
+    ['Ri', r.Ri.toFixed(3)]
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Normal Venting');
+  XLSX.writeFile(wb, 'normal-venting-report.xlsx');
+};
+</script>
+</body>
+</html>

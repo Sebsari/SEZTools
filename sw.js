@@ -1,10 +1,11 @@
-const CACHE_NAME = 'seztools-v13';
+const CACHE_NAME = 'seztools-v16';
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './pump-module.html',
   './linesizing-module.html',
+  './tank-module.html',
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png',
