@@ -96,7 +96,8 @@
 
   <div style="display:flex; gap:6px; margin-bottom:16px;">
     <button class="tab-btn active" data-tab="tab-hd" style="font-size:12px; font-weight:600; padding:7px 14px;">Height &amp; Diameter</button>
-    <button class="tab-btn" data-tab="tab-vent" style="font-size:12px; font-weight:600; padding:7px 14px;">Venting</button>
+    <button class="tab-btn" data-tab="tab-vent" style="font-size:12px; font-weight:600; padding:7px 14px;">Venting (Normal)</button>
+    <button class="tab-btn" data-tab="tab-fire" style="font-size:12px; font-weight:600; padding:7px 14px;">Venting (Fire)</button>
   </div>
 
   <div id="tab-hd" class="tab-pane">
@@ -137,10 +138,6 @@
       <div class="field-row"><input type="number" id="dmax" value="" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
       <div class="hint">for record/report only, not used in this calc</div>
     </div>
-  </div>
-
-  <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
-    <button id="calc-btn" style="font-size:13px; padding:8px 18px; font-weight:600;">Calculate</button>
   </div>
 
   <div id="status-panel"></div>
@@ -213,6 +210,7 @@
         <option value="none" selected>None (Ri = 1)</option>
         <option value="full">Fully insulated</option>
         <option value="partial">Partially insulated</option>
+        <option value="double">Double-wall tank</option>
       </select>
     </div>
     <div class="field">
@@ -235,10 +233,15 @@
       <label>Insulated surface area (Ainp) — partial only</label>
       <div class="field-row"><input type="number" id="vAinp" value="" step="any"><span class="hint" style="flex-shrink:0">m²</span></div>
     </div>
-  </div>
-
-  <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
-    <button id="vent-calc-btn" style="font-size:13px; padding:8px 18px; font-weight:600;">Calculate</button>
+    <div class="field">
+      <label>Total tank surface area (A) — double-wall only</label>
+      <div class="field-row"><input type="number" id="vAdwA" value="" step="any"><span class="hint" style="flex-shrink:0">m²</span></div>
+      <div class="hint">shell + roof</div>
+    </div>
+    <div class="field">
+      <label>Area outside containment (Ac) — double-wall only</label>
+      <div class="field-row"><input type="number" id="vAdwAc" value="" step="any"><span class="hint" style="flex-shrink:0">m²</span></div>
+    </div>
   </div>
 
   <div id="vent-status-panel"></div>
@@ -246,6 +249,86 @@
 
   <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
     <button id="vent-excel-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);" disabled>Export Excel</button>
+  </div>
+  </div>
+
+  <div id="tab-fire" class="tab-pane" style="display:none;">
+  <p class="subtitle">Emergency (fire exposure) venting requirements per API 2000 (7th Ed.), §3.3.3.3 — SI units, nonrefrigerated aboveground tanks.</p>
+
+  <div class="section-title">Tank Geometry</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Tank type</label>
+      <select id="fType">
+        <option value="vertical" selected>Vertical</option>
+        <option value="horizontal">Horizontal</option>
+        <option value="sphere">Sphere</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Diameter (D)</label>
+      <div class="field-row"><input type="number" id="fD" value="10" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
+    </div>
+    <div class="field" id="fDim2Field">
+      <label id="fDim2Label">Height (H)</label>
+      <div class="field-row"><input type="number" id="fDim2" value="14" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
+    </div>
+  </div>
+  <div class="hint" style="margin-top:6px;">Wetted area: vertical = shell area up to 9.14 m above grade; horizontal/sphere = 75%/55% of total surface area (the standard's height-based alternative for unusually large horizontal/sphere vessels isn't automated here — use engineering judgment per §3.3.3.3.3, footnote a).</div>
+
+  <div class="section-title">Conditions</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Design pressure</label>
+      <div class="field-row"><input type="number" id="fP" value="20" step="any"><span class="hint" style="flex-shrink:0">kPag</span></div>
+    </div>
+    <div class="field">
+      <label>Method</label>
+      <select id="fMethod">
+        <option value="hexane" selected>Hexane-similar shortcut (Table 5/7, Eq 16)</option>
+        <option value="general">General — any fluid (Table 3, Eq 14)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Environmental factor (F)</label>
+      <select id="fEnv">
+        <option value="1.0" selected>Bare metal tank (F=1.0)</option>
+        <option value="0.3">Insulated, 1 in / 4.0 W/m²K (F=0.3)</option>
+        <option value="0.15">Insulated, 2 in / 2.0 W/m²K (F=0.15)</option>
+        <option value="0.075">Insulated, 4 in / 1.0 W/m²K (F=0.075)</option>
+        <option value="0.05">Insulated, 6 in / 0.67 W/m²K (F=0.05)</option>
+        <option value="0.0375">Insulated, 8 in / 0.5 W/m²K (F=0.0375)</option>
+        <option value="0.03">Insulated, 10 in / 0.4 W/m²K (F=0.03)</option>
+        <option value="0.025">Insulated, 12 in / 0.33 W/m²K (F=0.025)</option>
+        <option value="0.5">Impoundment away from tank (F=0.5)</option>
+        <option value="0.03">Earth-covered above grade (F=0.03)</option>
+        <option value="0">Underground storage (F=0)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-title" id="fGeneralTitle" style="display:none;">Fluid Properties (General Method)</div>
+  <div class="field-grid" id="fGeneralFields" style="display:none;">
+    <div class="field">
+      <label>Latent heat of vaporization (L)</label>
+      <div class="field-row"><input type="number" id="fL" value="335" step="any"><span class="hint" style="flex-shrink:0">kJ/kg</span></div>
+    </div>
+    <div class="field">
+      <label>Molecular mass (M)</label>
+      <div class="field-row"><input type="number" id="fM" value="86.17" step="any"><span class="hint" style="flex-shrink:0">kg/kmol</span></div>
+    </div>
+    <div class="field">
+      <label>Relieving temperature (T)</label>
+      <div class="field-row"><input type="number" id="fT" value="15.6" step="any"><span class="hint" style="flex-shrink:0">°C</span></div>
+      <div class="hint">usually the bubble point at relieving pressure</div>
+    </div>
+  </div>
+
+  <div id="fire-status-panel"></div>
+  <div id="fire-results-panel"></div>
+
+  <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
+    <button id="fire-excel-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);" disabled>Export Excel</button>
   </div>
   </div>
 
@@ -357,7 +440,7 @@ function fmt(x, d=2){ return (Math.round(x * Math.pow(10,d)) / Math.pow(10,d)).t
 
 let lastResult = null, lastInputs = null;
 
-document.getElementById('calc-btn').onclick = () => {
+function runHD() {
   const v1raw = parseFloat(document.getElementById('v1').value);
   const v1unit = document.getElementById('v1Unit').value;
   const d1 = parseFloat(document.getElementById('d1').value);
@@ -395,7 +478,12 @@ document.getElementById('calc-btn').onclick = () => {
   statusEl.innerHTML = '<div class="status-box status-ok">Sizing complete.</div>';
   resultsEl.innerHTML = renderResults(res);
   pdfBtn.disabled = false; excelBtn.disabled = false;
-};
+}
+['v1','v1Unit','d1','d2','q2','q1','dmax'].forEach(id => {
+  document.getElementById(id).addEventListener('input', runHD);
+  document.getElementById(id).addEventListener('change', runHD);
+});
+runHD();
 
 function flagHtml(considered, text){ return considered ? `<span class="flag">(${text} considered)</span>` : ''; }
 
@@ -503,8 +591,8 @@ function computeNormalVenting(p){
   const VOT_raw = p.Y * Math.pow(p.Vtk, 0.9);
   const VIT_raw = p.C * Math.pow(p.Vtk, 0.7);
 
-  // Insulation reduction factor Ri (Eq 11, 12)
-  let Ri = 1, Rin = null, Rinp = null;
+  // Insulation reduction factor Ri (Eq 11, 12), or Rc for double-wall tanks (Eq 13)
+  let Ri = 1, Rin = null, Rinp = null, Rc = null;
   if (p.insType === 'full' || p.insType === 'partial'){
     Rin = 1 / (1 + (p.h * p.lin) / p.lam);
     Ri = Rin;
@@ -513,18 +601,31 @@ function computeNormalVenting(p){
     Rinp = (p.Ainp / p.ATTS) * Rin + (1 - p.Ainp / p.ATTS);
     Ri = Rinp;
   }
+  if (p.insType === 'double'){
+    Rc = 0.25 + 0.75 * (p.Ac / p.A);
+    Ri = Rc;
+  }
 
   const VOT = VOT_raw * Ri;
   const VIT = VIT_raw * Ri;
 
+  // Inert-gas blanketing, Annex F (informative), Equations F.1-F.6 — reuses C, Ri, Vtk, Vpe.
+  // VI = k*C*Ri*Vtk^0.7 + Vpe = k*VIT + Vpe (Ri multiplies Vtk^0.7, matching the VIT structure, not (Ri*Vtk)^0.7)
+  const blanket = [0.1, 0.2, 0.5].map((k, idx) => ({
+    level: idx + 1,
+    VI_flow: k * VIT_raw * Ri + p.Vpe,
+    VI_reserve: [0.04, 0.08, 0.12][idx] * p.Vtk
+  }));
+
   return {
-    Vop, Vip, VOT_raw, VIT_raw, Ri, Rin, Rinp, VOT, VIT,
+    Vop, Vip, VOT_raw, VIT_raw, Ri, Rin, Rinp, Rc, VOT, VIT,
     totalOut: Vop + VOT,
-    totalIn: Vip + VIT
+    totalIn: Vip + VIT,
+    blanket
   };
 }
 
-document.getElementById('vent-calc-btn').onclick = () => {
+function runVent() {
   const liqType = document.getElementById('vLiqType').value;
   const Vpf = parseFloat(document.getElementById('vVpf').value);
   const Vpe = parseFloat(document.getElementById('vVpe').value);
@@ -538,6 +639,8 @@ document.getElementById('vent-calc-btn').onclick = () => {
   const lam = parseFloat(document.getElementById('vLam').value);
   const ATTS = parseFloat(document.getElementById('vAtts').value);
   const Ainp = parseFloat(document.getElementById('vAinp').value);
+  const A_dw = parseFloat(document.getElementById('vAdwA').value);
+  const Ac_dw = parseFloat(document.getElementById('vAdwAc').value);
 
   const statusEl = document.getElementById('vent-status-panel');
   const resultsEl = document.getElementById('vent-results-panel');
@@ -555,13 +658,20 @@ document.getElementById('vent-calc-btn').onclick = () => {
     excelBtn.disabled = true; lastVentResult = null;
     return;
   }
+  if (insType === 'double' && (isNaN(A_dw) || A_dw <= 0 || isNaN(Ac_dw) || Ac_dw < 0 || Ac_dw > A_dw)){
+    statusEl.innerHTML = '<div class="status-box status-err">For a double-wall tank, enter A &gt; 0 and 0 &le; Ac &le; A.</div>';
+    resultsEl.innerHTML = '';
+    excelBtn.disabled = true; lastVentResult = null;
+    return;
+  }
+
 
   // C-factor: rows are hexane/higher x <25/>=25, per Table 2
   let C;
   if (vapClass === 'hexane') C = tempClass === 'lt25' ? Chex_lt25 : Chex_ge25;
   else C = tempClass === 'lt25' ? Chi_lt25 : Chi_ge25;
 
-  const res = computeNormalVenting({ liqType, Vpf, Vpe, Vtk, Y, C, insType, h, lin, lam, ATTS, Ainp });
+  const res = computeNormalVenting({ liqType, Vpf, Vpe, Vtk, Y, C, insType, h, lin, lam, ATTS, Ainp, A: A_dw, Ac: Ac_dw });
   lastVentResult = { ...res, inputs: { liqType, Vpf, Vpe, Vtk, Y, C, insType, h, lin, lam, ATTS, Ainp } };
 
   statusEl.innerHTML = '<div class="status-box status-ok">Normal venting requirements calculated (air-equivalent, Nm³/hr).</div>';
@@ -584,9 +694,19 @@ document.getElementById('vent-calc-btn').onclick = () => {
       <tr><th>C (vapor pressure/temp/latitude)</th><td class="val">${C}</td></tr>
       <tr><th>Ri (insulation reduction)</th><td class="val">${fmt(res.Ri,3)}</td></tr>
     </table>
+    <div class="section-title">Inert-gas Blanketing (Annex F, informative)</div>
+    <table class="results">
+      <tr><th>Level</th><th style="text-align:right">Required Flow</th><th style="text-align:right">Reserve Volume</th></tr>
+      ${res.blanket.map(b => `<tr><th>Level ${b.level}</th><td class="val">${fmt(b.VI_flow,1)} m³/hr</td><td class="val">${fmt(b.VI_reserve,1)} m³</td></tr>`).join('')}
+    </table>
   </div>`;
   excelBtn.disabled = false;
-};
+}
+['vLiqType','vVpf','vVpe','vVtk','vLat','vVapClass','vTempClass','vInsType','vH','vLin','vLam','vAtts','vAinp','vAdwA','vAdwAc'].forEach(id => {
+  document.getElementById(id).addEventListener('input', runVent);
+  document.getElementById(id).addEventListener('change', runVent);
+});
+runVent();
 
 document.getElementById('vent-excel-btn').onclick = () => {
   if (!lastVentResult) return;
@@ -611,10 +731,190 @@ document.getElementById('vent-excel-btn').onclick = () => {
     ['Vip (discharge)', r.Vip.toFixed(1)],
     ['VIT (thermal in)', r.VIT.toFixed(1)],
     ['Total in-breathing', r.totalIn.toFixed(1)],
-    ['Ri', r.Ri.toFixed(3)]
+    ['Ri', r.Ri.toFixed(3)],
+    [],
+    ['Inert-gas Blanketing (Annex F, informative)'],
+    ['Level', 'Required Flow (m3/hr)', 'Reserve Volume (m3)'],
+    ...r.blanket.map(b => [`Level ${b.level}`, b.VI_flow.toFixed(1), b.VI_reserve.toFixed(1)])
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Normal Venting');
   XLSX.writeFile(wb, 'normal-venting-report.xlsx');
+};
+
+// ---- Emergency (Fire) Venting (API 2000 7th Ed., 3.3.3.3 — Equations 14, 16, Tables 3, 7, 9) ----
+// Table 7: Emergency Venting Required for Fire Exposure vs Wetted Surface Area (SI), for ATWS < 260 m^2
+const TABLE7 = [
+  [2,608],[3,913],[4,1217],[5,1521],[6,1825],[7,2130],[8,2434],[9,2738],
+  [11,3347],[13,3955],[15,4563],[17,5172],[19,5780],[22,6217],[25,6684],[30,7411],
+  [35,8086],[40,8721],[45,9322],[50,9895],[60,10971],[70,11971],[80,12911],[90,13801],
+  [110,15461],[130,15751],[150,16532],[175,17416],[200,18220],[230,19102],[260,19910]
+];
+
+function table7Lookup(ATWS){
+  if (ATWS <= TABLE7[0][0]) return { q: TABLE7[0][1], clamped: 'min' };
+  for (let i = 1; i < TABLE7.length; i++){
+    const [a0, q0] = TABLE7[i-1], [a1, q1] = TABLE7[i];
+    if (ATWS <= a1){
+      const t = (ATWS - a0) / (a1 - a0);
+      return { q: q0 + t * (q1 - q0), clamped: null };
+    }
+  }
+  return { q: TABLE7[TABLE7.length-1][1], clamped: 'max' };
+}
+
+// Table 3: Heat Input, Q (SI, watts) — only valid for design pressure <= 103.4 kPag
+function heatInputTable3(ATWS, P_kPag){
+  if (P_kPag > 103.4) return null;
+  if (ATWS < 18.6) return 63150 * ATWS;
+  if (ATWS < 93) return 224200 * Math.pow(ATWS, 0.566);
+  if (ATWS < 260) return 630400 * Math.pow(ATWS, 0.338);
+  // ATWS >= 260
+  if (P_kPag <= 7) return 4129700;
+  return 43200 * Math.pow(ATWS, 0.82);
+}
+
+function wettedArea(type, D, dim2){
+  const HCAP = 9.14; // m, height above grade cap per the standard
+  if (type === 'vertical') return Math.PI * D * Math.min(dim2, HCAP);
+  if (type === 'horizontal'){
+    const total = Math.PI * D * dim2 + (Math.PI * D * D) / 2; // shell + 2 end caps
+    return 0.75 * total;
+  }
+  if (type === 'sphere'){
+    const total = Math.PI * D * D; // full sphere surface area
+    return 0.55 * total;
+  }
+}
+
+function computeFireVenting(p){
+  const ATWS = wettedArea(p.type, p.D, p.dim2);
+  let q, branch, Q = null, table7Note = null;
+
+  if (p.method === 'hexane'){
+    if (ATWS < 260){
+      if (p.P > 103.4) return { ATWS, error: 'Table 5/7 only covers design pressure ≤ 103.4 kPag.' };
+      const t7 = table7Lookup(ATWS);
+      q = t7.q * p.F;
+      branch = 'Table 7 (interpolated)' + (t7.clamped ? `, clamped to table ${t7.clamped}` : '');
+      table7Note = t7.clamped;
+    } else {
+      if (p.P <= 7){
+        q = 19910 * p.F;
+        branch = 'Table 5, ≥260 m², ≤7 kPag (flat value)';
+      } else if (p.P <= 103.4){
+        q = 208.2 * p.F * Math.pow(ATWS, 0.82);
+        branch = 'Equation (16)';
+      } else {
+        return { ATWS, error: 'Table 5/Eq.16 only covers design pressure ≤ 103.4 kPag.' };
+      }
+    }
+  } else { // general method, Equation (14)
+    Q = heatInputTable3(ATWS, p.P);
+    if (Q === null) return { ATWS, error: 'Table 3 only covers design pressure ≤ 103.4 kPag.' };
+    const L = p.L * 1000; // kJ/kg -> J/kg
+    const T = p.T + 273.15; // C -> K
+    q = 906.6 * (Q * p.F / L) * Math.sqrt(T / p.M);
+    branch = 'Equation (14)';
+  }
+
+  return { ATWS, q, branch, Q, table7Note };
+}
+
+let lastFireResult = null;
+
+document.getElementById('fType').addEventListener('change', () => {
+  const t = document.getElementById('fType').value;
+  const label = document.getElementById('fDim2Label');
+  const field = document.getElementById('fDim2Field');
+  if (t === 'vertical'){ label.textContent = 'Height (H)'; field.style.display = ''; }
+  else if (t === 'horizontal'){ label.textContent = 'Length (L)'; field.style.display = ''; }
+  else { field.style.display = 'none'; }
+  runFire();
+});
+
+document.getElementById('fMethod').addEventListener('change', () => {
+  const isGeneral = document.getElementById('fMethod').value === 'general';
+  document.getElementById('fGeneralTitle').style.display = isGeneral ? '' : 'none';
+  document.getElementById('fGeneralFields').style.display = isGeneral ? '' : 'none';
+  runFire();
+});
+
+function runFire(){
+  const type = document.getElementById('fType').value;
+  const D = parseFloat(document.getElementById('fD').value);
+  const dim2 = parseFloat(document.getElementById('fDim2').value) || 0;
+  const P = parseFloat(document.getElementById('fP').value);
+  const method = document.getElementById('fMethod').value;
+  const F = parseFloat(document.getElementById('fEnv').value);
+  const L = parseFloat(document.getElementById('fL').value);
+  const M = parseFloat(document.getElementById('fM').value);
+  const T = parseFloat(document.getElementById('fT').value);
+
+  const statusEl = document.getElementById('fire-status-panel');
+  const resultsEl = document.getElementById('fire-results-panel');
+  const excelBtn = document.getElementById('fire-excel-btn');
+
+  if (isNaN(D) || D <= 0 || isNaN(P) || (type !== 'sphere' && (isNaN(dim2) || dim2 <= 0))){
+    statusEl.innerHTML = '<div class="status-box status-err">Enter diameter, height/length (as applicable) and design pressure.</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastFireResult = null;
+    return;
+  }
+  if (method === 'general' && (isNaN(L) || L <= 0 || isNaN(M) || M <= 0 || isNaN(T))){
+    statusEl.innerHTML = '<div class="status-box status-err">For the general method, enter latent heat, molecular mass and relieving temperature.</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastFireResult = null;
+    return;
+  }
+
+  const res = computeFireVenting({ type, D, dim2, P, method, F, L, M, T });
+  if (res.error){
+    statusEl.innerHTML = `<div class="status-box status-err">${res.error}</div>`;
+    resultsEl.innerHTML = `<div class="panel"><table class="results"><tr><th>Wetted area (ATWS)</th><td class="val">${fmt(res.ATWS,2)} m²</td></tr></table></div>`;
+    excelBtn.disabled = true; lastFireResult = null;
+    return;
+  }
+
+  lastFireResult = { ...res, inputs: { type, D, dim2, P, method, F, L, M, T } };
+  statusEl.innerHTML = '<div class="status-box status-ok">Fire/emergency venting requirement calculated (air-equivalent, Nm³/hr).</div>' +
+    (res.table7Note ? `<div class="status-box" style="background:rgba(166,122,30,.1); color:var(--warn); margin-top:6px;">Wetted area is ${res.table7Note === 'min' ? 'below' : 'above'} Table 7's tabulated range — using the table's ${res.table7Note} value.</div>` : '');
+  resultsEl.innerHTML = `<div class="panel">
+    <table class="results">
+      <tr><th>Wetted surface area (ATWS)</th><td class="val">${fmt(res.ATWS,2)} m²</td></tr>
+      ${res.Q !== null ? `<tr><th>Heat input (Q)</th><td class="val">${fmt(res.Q,0)} W</td></tr>` : ''}
+      <tr><th>Basis</th><td class="val">${res.branch}</td></tr>
+      <tr class="hl"><th>Required venting capacity (q)</th><td class="val">${fmt(res.q,1)} Nm³/hr</td></tr>
+    </table>
+  </div>`;
+  excelBtn.disabled = false;
+}
+
+['fD','fDim2','fP','fEnv','fL','fM','fT'].forEach(id => {
+  document.getElementById(id).addEventListener('input', runFire);
+  document.getElementById(id).addEventListener('change', runFire);
+});
+runFire();
+
+document.getElementById('fire-excel-btn').onclick = () => {
+  if (!lastFireResult) return;
+  const r = lastFireResult, inp = r.inputs;
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ['SEZTools - Fire/Emergency Venting Report (API 2000, 3.3.3.3)'],
+    [],
+    ['Input Data'],
+    ['Tank type', inp.type],
+    ['Diameter (D)', inp.D, 'm'],
+    ['Height/Length', inp.dim2, 'm'],
+    ['Design pressure (P)', inp.P, 'kPag'],
+    ['Method', inp.method],
+    ['Environmental factor (F)', inp.F],
+    [],
+    ['Results'],
+    ['Wetted area (ATWS)', r.ATWS.toFixed(2), 'm2'],
+    ['Basis', r.branch],
+    ['Required venting capacity (q)', r.q.toFixed(1), 'Nm3/hr']
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Fire Venting');
+  XLSX.writeFile(wb, 'fire-venting-report.xlsx');
 };
 </script>
 </body>
