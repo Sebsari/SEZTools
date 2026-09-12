@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SEZTools - Separator Sizing</title>
+<link rel="icon" href="icon-192.png"/>
+<script src="vendor/xlsx.full.min.js"></script>
+<style>
+  @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('vendor/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');}
+  @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:600;font-display:swap;src:url('vendor/fonts/jetbrains-mono-latin-600-normal.woff2') format('woff2');}
+  @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:700;font-display:swap;src:url('vendor/fonts/jetbrains-mono-latin-700-normal.woff2') format('woff2');}
+  :root {
+    --surface-1: #F3F5F7;
+    --surface-2: #FFFFFF;
+    --border: #C7CDD3;
+    --border-strong: #9AA3AA;
+    --text-primary: #1E2A33;
+    --text-secondary: #4A5A63;
+    --text-muted: #8A9AA3;
+    --text-accent: #0B5FA5;
+    --warn: #A67A1E;
+    --err: #9C3A32;
+    --r-sm: 6px;
+    --r-md: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    background: #E7EBEF;
+    color: var(--text-primary);
+    margin: 0;
+    padding: 20px;
+    line-height: 1.5;
+  }
+  .app-shell { max-width: 960px; margin: 0 auto; }
+  button {
+    font-family: inherit;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    color: var(--text-primary);
+  }
+  button:hover:not(:disabled) { border-color: var(--text-accent); color: var(--text-accent); }
+  input, select {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+    color: var(--text-primary);
+  }
+  input:focus, select:focus { outline: none; border-color: var(--text-accent); }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+  h1 { font-size: 13px; font-weight: 700; letter-spacing: .5px; margin: 0 0 4px; text-transform: uppercase; color: var(--text-secondary); }
+  .subtitle { font-size: 12px; color: var(--text-muted); margin: 0 0 20px; }
+  .section-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .5px; margin: 22px 0 10px; }
+  .field-grid { display: flex; flex-wrap: wrap; gap: 12px 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 170px; max-width: 230px; }
+  .field label { font-size: 11px; color: var(--text-secondary); }
+  .field .hint { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .field-row { display: flex; gap: 6px; align-items: center; }
+  .field-row select { flex-shrink: 0; }
+  .panel { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem; margin-top: 1rem; }
+  table.results { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.results td, table.results th { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+  table.results th { color: var(--text-secondary); font-weight: 600; width: 46%; }
+  table.results td.val { text-align: right; font-weight: 600; }
+  table.results tr.hl td { color: var(--text-accent); }
+  .flag { display:inline-block; font-size:10px; color: var(--warn); margin-left:6px; }
+  .status-box { margin-top: 1rem; font-size: 13px; padding: 10px 14px; border-radius: 8px; }
+  .status-ok { background: rgba(37,99,57,.08); color: #256339; }
+  .status-err { background: rgba(156,58,50,.08); color: var(--err); }
+  .tab-btn { border-radius: var(--r-sm); }
+  .tab-btn.active { background: var(--text-accent); color: #fff; border-color: var(--text-accent); }
+  .refs { font-size: 11px; color: var(--text-muted); margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--border); line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <div style="display:flex; align-items:baseline; gap:14px; padding:10px 0 8px; border-bottom:1px solid var(--border); margin-bottom:12px;">
+    <div style="font-size:12px; font-weight:700; color:var(--text-accent); background:rgba(11,95,165,.08); padding:3px 9px; border-radius:var(--r-sm); letter-spacing:1px;">SEZTools</div>
+    <div style="font-size:14px; font-weight:600; color:var(--text-primary);">Separator Sizing</div>
+  </div>
+
+  <div style="display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;">
+    <button class="tab-btn active" data-tab="tab-vert" style="font-size:12px; font-weight:600; padding:7px 14px;">Vertical Two-Phase</button>
+    <button class="tab-btn" data-tab="tab-horiz" style="font-size:12px; font-weight:600; padding:7px 14px;">Horizontal Two-Phase</button>
+    <button class="tab-btn" data-tab="tab-horiz3" style="font-size:12px; font-weight:600; padding:7px 14px;">Horizontal Three-Phase</button>
+  </div>
+
+  <div id="tab-vert" class="tab-pane">
+  <p class="subtitle">Gas-capacity sizing via the Souders-Brown equation (Ks per GPSA Engineering Data Book) and liquid-holdup sizing via retention time. General public-domain correlations — not tied to any single company's design practice.</p>
+
+  <div class="section-title">Gas Phase</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Actual gas volumetric flow (Qg)</label>
+      <div class="field-row"><input type="number" id="vQg" value="1800" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+      <div class="hint">at actual operating pressure &amp; temperature, not standard conditions</div>
+    </div>
+    <div class="field">
+      <label>Gas density (ρg)</label>
+      <div class="field-row"><input type="number" id="vRhoG" value="8" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+    </div>
+    <div class="field">
+      <label>Operating pressure</label>
+      <div class="field-row"><input type="number" id="vP" value="100" step="any"><span class="hint" style="flex-shrink:0">psig</span></div>
+      <div class="hint">used for GPSA Ks pressure de-rating</div>
+    </div>
+    <div class="field">
+      <label>Mist eliminator type</label>
+      <select id="vMistType">
+        <option value="mesh" selected>Wire mesh pad</option>
+        <option value="vane">Vane pack</option>
+        <option value="cyclone">Multi-cyclone</option>
+        <option value="none">None (open drum)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-title">Liquid Phase</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Liquid volumetric flow (Ql)</label>
+      <div class="field-row"><input type="number" id="vQl" value="30" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+    <div class="field">
+      <label>Liquid density (ρL)</label>
+      <div class="field-row"><input type="number" id="vRhoL" value="800" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+    </div>
+    <div class="field">
+      <label>Liquid retention time</label>
+      <div class="field-row"><input type="number" id="vTr" value="3" step="any"><span class="hint" style="flex-shrink:0">min</span></div>
+      <div class="hint">typical 1-3 min for a surge/knockout drum; use process-specific value if known</div>
+    </div>
+  </div>
+
+  <div class="section-title">Geometry Allowances (defaults follow common industry practice)</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Clearance, bottom head to LLL</label>
+      <div class="field-row"><input type="number" id="vHBelow" value="0.4" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
+    </div>
+    <div class="field">
+      <label>Disengagement height, NLL to mist eliminator</label>
+      <div class="field-row"><input type="number" id="vHDiseng" value="" step="any" placeholder="auto"><span class="hint" style="flex-shrink:0">m</span></div>
+      <div class="hint">leave blank to auto-use max(0.4 m, 0.5×D)</div>
+    </div>
+    <div class="field">
+      <label>Clearance, mist eliminator to gas outlet</label>
+      <div class="field-row"><input type="number" id="vHAbove" value="0.4" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
+    </div>
+  </div>
+
+  <div id="vent-status-panel"></div>
+  <div id="vert-results-panel"></div>
+
+  <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
+    <button id="vert-excel-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);" disabled>Export Excel</button>
+  </div>
+  </div>
+
+  <div id="tab-horiz" class="tab-pane" style="display:none;">
+  <p class="subtitle">Horizontal separator sized via droplet settling theory (Stokes/Intermediate/Newton terminal-velocity correlations) at a half-full liquid level, combined with liquid retention time. The governing diameter (gas capacity vs. liquid retention) is found by bisection at your target slenderness (L/D) ratio — no single company's proprietary method is used.</p>
+
+  <div class="section-title">Gas Phase</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Actual gas volumetric flow (Qg)</label>
+      <div class="field-row"><input type="number" id="hQg" value="1800" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+    <div class="field">
+      <label>Gas density (ρg)</label>
+      <div class="field-row"><input type="number" id="hRhoG" value="8" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+    </div>
+    <div class="field">
+      <label>Gas viscosity (μg)</label>
+      <div class="field-row"><input type="number" id="hMuG" value="0.011" step="any"><span class="hint" style="flex-shrink:0">cP</span></div>
+    </div>
+    <div class="field">
+      <label>Design droplet size</label>
+      <select id="hDp">
+        <option value="500">500 µm — no mist eliminator (conservative)</option>
+        <option value="150" selected>150 µm — with mesh pad / vane pack</option>
+        <option value="100">100 µm — high-efficiency mist eliminator</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-title">Liquid Phase</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Liquid volumetric flow (Ql)</label>
+      <div class="field-row"><input type="number" id="hQl" value="30" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+    <div class="field">
+      <label>Liquid density (ρL)</label>
+      <div class="field-row"><input type="number" id="hRhoL" value="800" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+    </div>
+    <div class="field">
+      <label>Liquid retention time</label>
+      <div class="field-row"><input type="number" id="hTr" value="3" step="any"><span class="hint" style="flex-shrink:0">min</span></div>
+    </div>
+    <div class="field">
+      <label>Target slenderness ratio (L/D)</label>
+      <div class="field-row"><input type="number" id="hSlender" value="3" step="any"></div>
+      <div class="hint">typical practical range 2.5-5; lower ratios risk high liquid re-entrainment</div>
+    </div>
+  </div>
+
+  <div id="horiz-status-panel"></div>
+  <div id="horiz-results-panel"></div>
+
+  <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
+    <button id="horiz-excel-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);" disabled>Export Excel</button>
+  </div>
+  </div>
+
+  <div id="tab-horiz3" class="tab-pane" style="display:none;">
+  <p class="subtitle">Horizontal three-phase (gas/oil/water) separator. Same droplet-settling + retention-time basis as the two-phase tab, plus a circular-segment liquid split between the water and oil layers, with settling checks for water-in-oil (dehydration) and oil-in-water (de-oiling).</p>
+
+  <div class="section-title">Gas Phase</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Actual gas volumetric flow (Qg)</label>
+      <div class="field-row"><input type="number" id="t3Qg" value="1800" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+    <div class="field">
+      <label>Gas density (ρg)</label>
+      <div class="field-row"><input type="number" id="t3RhoG" value="8" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+    </div>
+    <div class="field">
+      <label>Gas viscosity (μg)</label>
+      <div class="field-row"><input type="number" id="t3MuG" value="0.011" step="any"><span class="hint" style="flex-shrink:0">cP</span></div>
+    </div>
+    <div class="field">
+      <label>Design gas-space droplet size</label>
+      <select id="t3DpGas">
+        <option value="500">500 µm — no mist eliminator</option>
+        <option value="150" selected>150 µm — with mesh pad / vane pack</option>
+        <option value="100">100 µm — high-efficiency mist eliminator</option>
+      </select>
+      <div class="hint">applied to the lighter liquid (oil) droplet — governing case for gas capacity</div>
+    </div>
+  </div>
+
+  <div class="section-title">Oil Phase</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Oil volumetric flow (Qo)</label>
+      <div class="field-row"><input type="number" id="t3Qo" value="25" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+    <div class="field">
+      <label>Oil density (ρo)</label>
+      <div class="field-row"><input type="number" id="t3RhoO" value="820" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+    </div>
+    <div class="field">
+      <label>Oil viscosity (μo)</label>
+      <div class="field-row"><input type="number" id="t3MuO" value="5" step="any"><span class="hint" style="flex-shrink:0">cP</span></div>
+    </div>
+    <div class="field">
+      <label>Oil retention time</label>
+      <div class="field-row"><input type="number" id="t3To" value="5" step="any"><span class="hint" style="flex-shrink:0">min</span></div>
+      <div class="hint">typical 3-10 min; higher for tight emulsions</div>
+    </div>
+    <div class="field">
+      <label>Design water-in-oil droplet size</label>
+      <div class="field-row"><input type="number" id="t3DpWiO" value="500" step="any"><span class="hint" style="flex-shrink:0">µm</span></div>
+      <div class="hint">water droplet that must settle down through the oil pad</div>
+    </div>
+  </div>
+
+  <div class="section-title">Water Phase</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Water volumetric flow (Qw)</label>
+      <div class="field-row"><input type="number" id="t3Qw" value="15" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+    </div>
+    <div class="field">
+      <label>Water density (ρw)</label>
+      <div class="field-row"><input type="number" id="t3RhoW" value="1000" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+    </div>
+    <div class="field">
+      <label>Water viscosity (μw)</label>
+      <div class="field-row"><input type="number" id="t3MuW" value="1" step="any"><span class="hint" style="flex-shrink:0">cP</span></div>
+    </div>
+    <div class="field">
+      <label>Water retention time</label>
+      <div class="field-row"><input type="number" id="t3Tw" value="5" step="any"><span class="hint" style="flex-shrink:0">min</span></div>
+    </div>
+    <div class="field">
+      <label>Design oil-in-water droplet size</label>
+      <div class="field-row"><input type="number" id="t3DpOiW" value="200" step="any"><span class="hint" style="flex-shrink:0">µm</span></div>
+      <div class="hint">oil droplet that must rise up through the water layer</div>
+    </div>
+  </div>
+
+  <div class="section-title">Geometry</div>
+  <div class="field-grid">
+    <div class="field">
+      <label>Target slenderness ratio (L/D)</label>
+      <div class="field-row"><input type="number" id="t3Slender" value="4" step="any"></div>
+      <div class="hint">typical practical range 3-5 for three-phase vessels</div>
+    </div>
+  </div>
+
+  <div id="horiz3-status-panel"></div>
+  <div id="horiz3-results-panel"></div>
+
+  <div style="margin-top:0.75rem; display:flex; justify-content:flex-end; gap:8px;">
+    <button id="horiz3-excel-btn" style="font-size:13px; padding:8px 16px; border:1px solid var(--border-strong);" disabled>Export Excel</button>
+  </div>
+  </div>
+
+  <div class="refs">
+    References: Souders, M. &amp; Brown, G.G. (1934), Ind. Eng. Chem.; GPSA Engineering Data Book (Ks table for mesh-pad demisters); API Spec 12J (Ks ranges); Stokes'/Intermediate/Newton drag-law terminal velocity correlations (Perry's Chemical Engineers' Handbook; Svrcek &amp; Monnery, Chem. Eng. Progress, 1993); Arnold, K. &amp; Stewart, M., "Surface Production Operations" Vol. 1 (typical retention times, geometry allowances, and the three-phase circular-segment liquid-split method). All public-domain / openly published correlations and standard analytic geometry — no proprietary company design-practice document (e.g. Shell DEP, ExxonMobil GP&amp;E) is used or reproduced.
+  </div>
+</div>
+
+<script>
+function fmt(x, d){ if (x === null || x === undefined || isNaN(x)) return '—'; return Number(x).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }); }
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+    document.getElementById(btn.dataset.tab).style.display = '';
+  });
+});
+
+// ---- Core physics: terminal (settling) velocity, 3-regime GPSA-style correlation ----
+const G = 9.80665;
+function terminalVelocity(dp, rhoL, rhoG, muG){
+  const dRho = rhoL - rhoG;
+  let Vt = (G * dp*dp * dRho) / (18 * muG);
+  let Re = (dp * Vt * rhoG) / muG;
+  if (Re <= 2) return { Vt, Re, regime: 'Stokes (Re \u2264 2)' };
+
+  Vt = (0.153 * Math.pow(G, 0.71) * Math.pow(dp, 1.14) * Math.pow(dRho, 0.71)) / (Math.pow(rhoG, 0.29) * Math.pow(muG, 0.43));
+  Re = (dp * Vt * rhoG) / muG;
+  if (Re <= 500) return { Vt, Re, regime: 'Intermediate (2 < Re \u2264 500)' };
+
+  Vt = 1.74 * Math.sqrt(G * dp * dRho / rhoG);
+  Re = (dp * Vt * rhoG) / muG;
+  return { Vt, Re, regime: 'Newton (Re > 500)' };
+}
+
+// ---- GPSA Ks table (vertical drum, horizontal wire-mesh pad), ft/s vs psig ----
+const KS_MESHPAD_TABLE = [[0,0.35],[300,0.33],[600,0.30],[900,0.27],[1500,0.21]];
+const MIST_TYPE_FACTOR = { mesh: 1.0, vane: 0.20/0.35, cyclone: 0.50/0.35, none: 0.5 };
+const MIST_TYPE_LABEL = { mesh: 'Wire mesh pad', vane: 'Vane pack', cyclone: 'Multi-cyclone', none: 'None (open drum)' };
+
+function ksMeshPadFtPerSec(P_psig){
+  const t = KS_MESHPAD_TABLE;
+  if (P_psig <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++){
+    if (P_psig <= t[i][0]){
+      const f = (P_psig - t[i-1][0]) / (t[i][0] - t[i-1][0]);
+      return t[i-1][1] + f * (t[i][1] - t[i-1][1]);
+    }
+  }
+  return t[t.length-1][1];
+}
+function ksVertical_mps(P_psig, mistType){
+  const ksFt = ksMeshPadFtPerSec(Math.max(0,P_psig)) * MIST_TYPE_FACTOR[mistType];
+  return ksFt * 0.3048;
+}
+
+// ---- Generalized terminal velocity (explicit disperse/continuous phase) for three-phase module ----
+function terminalVelocityGeneral(dp, rhoDisperse, rhoCont, muCont){
+  const dRho = Math.abs(rhoDisperse - rhoCont);
+  let Vt = (G * dp*dp * dRho) / (18 * muCont);
+  let Re = (dp * Vt * rhoCont) / muCont;
+  if (Re <= 2) return { Vt, Re, regime: 'Stokes (Re \u2264 2)' };
+
+  Vt = (0.153 * Math.pow(G, 0.71) * Math.pow(dp, 1.14) * Math.pow(dRho, 0.71)) / (Math.pow(rhoCont, 0.29) * Math.pow(muCont, 0.43));
+  Re = (dp * Vt * rhoCont) / muCont;
+  if (Re <= 500) return { Vt, Re, regime: 'Intermediate (2 < Re \u2264 500)' };
+
+  Vt = 1.74 * Math.sqrt(G * dp * dRho / rhoCont);
+  Re = (dp * Vt * rhoCont) / muCont;
+  return { Vt, Re, regime: 'Newton (Re > 500)' };
+}
+
+// Area of a circular segment (radius R=D/2), measured from the BOTTOM of the circle up to height h (0<=h<=D)
+function segmentArea(D, h){
+  const R = D / 2;
+  if (h <= 0) return 0;
+  if (h >= D) return Math.PI * R * R;
+  return R*R*Math.acos((R-h)/R) - (R-h)*Math.sqrt(Math.max(0, 2*R*h - h*h));
+}
+function invertSegmentArea(D, targetArea){
+  let lo = 0, hi = D;
+  const fullArea = Math.PI * (D/2) * (D/2);
+  if (targetArea <= 0) return 0;
+  if (targetArea >= fullArea) return D;
+  for (let i = 0; i < 100; i++){
+    const mid = (lo+hi)/2;
+    if (segmentArea(D, mid) < targetArea) lo = mid; else hi = mid;
+  }
+  return (lo+hi)/2;
+}
+
+// ---- Vertical separator sizing ----
+function sizeVertical(p){
+  const Ks = ksVertical_mps(p.P_psig, p.mistType);
+  const Vmax = Ks * Math.sqrt((p.rhoL - p.rhoG) / p.rhoG);
+  const D = Math.sqrt(4 * p.Qg / (Math.PI * Vmax));
+
+  const Vliq = p.Ql * p.tr_s;
+  const hHoldup = Vliq / (Math.PI * D * D / 4);
+
+  const hBelowLLL = p.hBelowLLL ?? 0.4;
+  const hDiseng = (p.hDiseng !== null && p.hDiseng !== undefined) ? p.hDiseng : Math.max(0.4, 0.5 * D);
+  const hMeshPad = p.mistType === 'mesh' ? 0.15 : (p.mistType === 'vane' ? 0.20 : 0);
+  const hAbove = p.hAbove ?? 0.4;
+
+  const Hss = hBelowLLL + hHoldup + hDiseng + hMeshPad + hAbove;
+  const LD = Hss / D;
+
+  return { Ks, Vmax, D, Vliq, hHoldup, hBelowLLL, hDiseng, hMeshPad, hAbove, Hss, LD };
+}
+
+// ---- Horizontal separator sizing (half-full, bisection on D) ----
+function lengthsAtD(D, Qg, Ql, tr_s, Vt){
+  const Leff_gas = 4 * Qg / (Math.PI * D * Vt);
+  const L_gas = Leff_gas + D;
+  const L_liq = 8 * Ql * tr_s / (Math.PI * D * D);
+  const L = Math.max(L_gas, L_liq);
+  return { Leff_gas, L_gas, L_liq, L, governedBy: L_liq > L_gas ? 'liquid retention' : 'gas capacity (droplet settling)' };
+}
+function sizeHorizontal(p){
+  const { Vt, Re, regime } = terminalVelocity(p.dp, p.rhoL, p.rhoG, p.muG);
+  const r = p.slenderness;
+
+  let lo = 1e-3, hi = 100;
+  const ratioAt = (D) => lengthsAtD(D, p.Qg, p.Ql, p.tr_s, Vt).L / D;
+  while (ratioAt(hi) > r && hi < 1e6) hi *= 2;
+  for (let i = 0; i < 100; i++){
+    const mid = (lo + hi) / 2;
+    if (ratioAt(mid) > r) lo = mid; else hi = mid;
+  }
+  const D = (lo + hi) / 2;
+  const { Leff_gas, L_gas, L_liq, L, governedBy } = lengthsAtD(D, p.Qg, p.Ql, p.tr_s, Vt);
+
+  const Ag_half = Math.PI * D * D / 8;
+  const Vg = p.Qg / Ag_half;
+  const Leff = L - D;
+  const tGasResidence = Leff / Vg;
+  const tSettle = (D / 2) / Vt;
+  const achievedRetentionTime = (Ag_half * L) / p.Ql;
+
+  return {
+    Vt, Re, regime, D, L, rTarget: r, rActual: L / D, Leff, Vg, governedBy,
+    L_gas, L_liq, tGasResidence, tSettle, gasMarginOk: tGasResidence >= tSettle - 1e-6,
+    achievedRetentionTime
+  };
+}
+
+// ---- Horizontal THREE-phase separator (gas/oil/water), half-full total liquid level ----
+function lengthsAtD3(D, Qg, Vt_gas, Qo, to_s, Qw, tw_s){
+  const Leff_gas = 4 * Qg / (Math.PI * D * Vt_gas);
+  const L_gas = Leff_gas + D;
+  const L_liq = 8 * (Qo*to_s + Qw*tw_s) / (Math.PI * D * D);
+  const L = Math.max(L_gas, L_liq);
+  return { Leff_gas, L_gas, L_liq, L, governedBy: L_liq > L_gas ? 'liquid retention' : 'gas capacity (droplet settling)' };
+}
+function sizeThreePhase(p){
+  // Oil (lighter liquid) droplet settling in gas governs gas capacity
+  const gasDroplet = terminalVelocityGeneral(p.dpGas, p.rhoOil, p.rhoG, p.muG);
+  const r = p.slenderness;
+  const to_s = p.to_min * 60, tw_s = p.tw_min * 60;
+
+  let lo = 1e-3, hi = 100;
+  const ratioAt = (D) => lengthsAtD3(D, p.Qg, gasDroplet.Vt, p.Qo, to_s, p.Qw, tw_s).L / D;
+  while (ratioAt(hi) > r && hi < 1e6) hi *= 2;
+  for (let i = 0; i < 100; i++){
+    const mid = (lo + hi) / 2;
+    if (ratioAt(mid) > r) lo = mid; else hi = mid;
+  }
+  const D = (lo + hi) / 2;
+  const { L_gas, L_liq, L, governedBy } = lengthsAtD3(D, p.Qg, gasDroplet.Vt, p.Qo, to_s, p.Qw, tw_s);
+
+  const fullLiqArea = Math.PI * D * D / 8;
+  const fracW = (p.Qw * tw_s) / (p.Qw * tw_s + p.Qo * to_s);
+  const Aw = fracW * fullLiqArea;
+  const Ao = fullLiqArea - Aw;
+
+  const hInterface = invertSegmentArea(D, Aw);
+  const hLiquidTop = D / 2;
+  const hOilPad = hLiquidTop - hInterface;
+
+  const to_actual = Ao * L / p.Qo;
+  const tw_actual = Aw * L / p.Qw;
+
+  const waterInOil = terminalVelocityGeneral(p.dpWaterInOil, p.rhoWater, p.rhoOil, p.muOil);
+  const tSettleWaterInOil = hOilPad / waterInOil.Vt;
+  const waterSettlingOk = to_actual >= tSettleWaterInOil - 1e-6;
+
+  const oilInWater = terminalVelocityGeneral(p.dpOilInWater, p.rhoOil, p.rhoWater, p.muWater);
+  const tSettleOilInWater = hInterface / oilInWater.Vt;
+  const oilRiseOk = tw_actual >= tSettleOilInWater - 1e-6;
+
+  const Ag_half = Math.PI * D * D / 8;
+  const Vg = p.Qg / Ag_half;
+  const Leff = L - D;
+  const tGasResidence = Leff / Vg;
+  const tSettleGas = (D / 2) / gasDroplet.Vt;
+  const gasMarginOk = tGasResidence >= tSettleGas - 1e-6;
+
+  return {
+    D, L, rTarget: r, rActual: L / D, governedBy, L_gas, L_liq, Leff,
+    gasDroplet, Vg, tGasResidence, tSettleGas, gasMarginOk,
+    fracW, Aw, Ao, hInterface, hOilPad, hLiquidTop,
+    to_actual, tw_actual,
+    waterInOil, tSettleWaterInOil, waterSettlingOk,
+    oilInWater, tSettleOilInWater, oilRiseOk
+  };
+}
+
+// ================= Vertical tab wiring =================
+let lastVertResult = null;
+function runVertical(){
+  const Qg = parseFloat(document.getElementById('vQg').value) / 3600; // m3/hr -> m3/s
+  const rhoG = parseFloat(document.getElementById('vRhoG').value);
+  const P_psig = parseFloat(document.getElementById('vP').value);
+  const mistType = document.getElementById('vMistType').value;
+  const Ql = parseFloat(document.getElementById('vQl').value) / 3600;
+  const rhoL = parseFloat(document.getElementById('vRhoL').value);
+  const tr_min = parseFloat(document.getElementById('vTr').value);
+  const hBelowLLL = parseFloat(document.getElementById('vHBelow').value);
+  const hDisengRaw = document.getElementById('vHDiseng').value;
+  const hDiseng = hDisengRaw === '' ? null : parseFloat(hDisengRaw);
+  const hAbove = parseFloat(document.getElementById('vHAbove').value);
+
+  const statusEl = document.getElementById('vent-status-panel');
+  const resultsEl = document.getElementById('vert-results-panel');
+  const excelBtn = document.getElementById('vert-excel-btn');
+
+  if ([Qg,rhoG,P_psig,Ql,rhoL,tr_min,hBelowLLL,hAbove].some(v => isNaN(v)) || Qg<=0 || rhoG<=0 || Ql<0 || rhoL<=0 || tr_min<=0){
+    statusEl.innerHTML = '<div class="status-box status-err">Fill in all fields with valid, positive values.</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastVertResult = null;
+    return;
+  }
+  if (rhoL <= rhoG){
+    statusEl.innerHTML = '<div class="status-box status-err">Liquid density must be greater than gas density.</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastVertResult = null;
+    return;
+  }
+
+  const res = sizeVertical({ Qg, rhoG, P_psig, mistType, Ql, rhoL, tr_s: tr_min*60, hBelowLLL, hDiseng, hAbove });
+  lastVertResult = { ...res, inputs: { Qg: Qg*3600, rhoG, P_psig, mistType, Ql: Ql*3600, rhoL, tr_min, hBelowLLL, hAbove } };
+
+  const ldWarn = (res.LD < 2.5 || res.LD > 6)
+    ? `<div class="status-box" style="background:rgba(166,122,30,.1); color:var(--warn); margin-top:6px;">Resulting L/D = ${fmt(res.LD,2)} is outside the typical practical range (~2.5–6 for vertical drums) — consider revisiting retention time or flow basis.</div>`
+    : '';
+  statusEl.innerHTML = '<div class="status-box status-ok">Vertical separator sized via Souders-Brown (Ks) gas capacity + liquid retention-time holdup.</div>' + ldWarn;
+
+  resultsEl.innerHTML = `<div class="panel">
+    <div class="section-title" style="margin-top:0">Gas Capacity (Souders-Brown)</div>
+    <table class="results">
+      <tr><th>Ks (${MIST_TYPE_LABEL[mistType]}, ${fmt(P_psig,0)} psig)</th><td class="val">${fmt(res.Ks,4)} m/s</td></tr>
+      <tr><th>Max allowable gas velocity (Vmax)</th><td class="val">${fmt(res.Vmax,3)} m/s</td></tr>
+      <tr class="hl"><th>Diameter for gas capacity</th><td class="val">${fmt(res.D,3)} m</td></tr>
+    </table>
+    <div class="section-title">Liquid Holdup</div>
+    <table class="results">
+      <tr><th>Liquid volume for retention time</th><td class="val">${fmt(res.Vliq,2)} m³</td></tr>
+      <tr><th>Holdup height at this diameter</th><td class="val">${fmt(res.hHoldup,3)} m</td></tr>
+    </table>
+    <div class="section-title">Overall Geometry</div>
+    <table class="results">
+      <tr><th>Bottom head to LLL</th><td class="val">${fmt(res.hBelowLLL,2)} m</td></tr>
+      <tr><th>Liquid holdup (LLL to NLL)</th><td class="val">${fmt(res.hHoldup,2)} m</td></tr>
+      <tr><th>Disengagement, NLL to mist eliminator</th><td class="val">${fmt(res.hDiseng,2)} m</td></tr>
+      <tr><th>Mist eliminator thickness</th><td class="val">${fmt(res.hMeshPad,2)} m</td></tr>
+      <tr><th>Above mist eliminator to outlet</th><td class="val">${fmt(res.hAbove,2)} m</td></tr>
+      <tr class="hl"><th>Tangent-to-tangent height</th><td class="val">${fmt(res.Hss,2)} m</td></tr>
+      <tr class="hl"><th>Diameter</th><td class="val">${fmt(res.D,3)} m</td></tr>
+      <tr><th>L/D ratio</th><td class="val">${fmt(res.LD,2)}</td></tr>
+    </table>
+  </div>`;
+  excelBtn.disabled = false;
+}
+['vQg','vRhoG','vP','vMistType','vQl','vRhoL','vTr','vHBelow','vHDiseng','vHAbove'].forEach(id => {
+  document.getElementById(id).addEventListener('input', runVertical);
+  document.getElementById(id).addEventListener('change', runVertical);
+});
+runVertical();
+
+document.getElementById('vert-excel-btn').onclick = () => {
+  if (!lastVertResult) return;
+  const r = lastVertResult, inp = r.inputs;
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ['SEZTools - Vertical Two-Phase Separator Sizing Report'],
+    ['(Souders-Brown / GPSA Ks method; public-domain correlations)'],
+    [],
+    ['Input Data'],
+    ['Gas flow (Qg), actual', inp.Qg.toFixed(1), 'm3/hr'],
+    ['Gas density', inp.rhoG, 'kg/m3'],
+    ['Operating pressure', inp.P_psig, 'psig'],
+    ['Mist eliminator', MIST_TYPE_LABEL[inp.mistType]],
+    ['Liquid flow (Ql)', inp.Ql.toFixed(1), 'm3/hr'],
+    ['Liquid density', inp.rhoL, 'kg/m3'],
+    ['Retention time', inp.tr_min, 'min'],
+    [],
+    ['Results'],
+    ['Ks', r.Ks.toFixed(4), 'm/s'],
+    ['Vmax', r.Vmax.toFixed(3), 'm/s'],
+    ['Diameter (D)', r.D.toFixed(3), 'm'],
+    ['Liquid holdup volume', r.Vliq.toFixed(2), 'm3'],
+    ['Holdup height', r.hHoldup.toFixed(3), 'm'],
+    ['Tangent-to-tangent height', r.Hss.toFixed(2), 'm'],
+    ['L/D ratio', r.LD.toFixed(2)]
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Vertical Separator');
+  XLSX.writeFile(wb, 'vertical-separator-report.xlsx');
+};
+
+// ================= Horizontal tab wiring =================
+let lastHorizResult = null;
+function runHorizontal(){
+  const Qg = parseFloat(document.getElementById('hQg').value) / 3600;
+  const rhoG = parseFloat(document.getElementById('hRhoG').value);
+  const muG = parseFloat(document.getElementById('hMuG').value) / 1000; // cP -> Pa.s
+  const dp = parseFloat(document.getElementById('hDp').value) * 1e-6; // micron -> m
+  const Ql = parseFloat(document.getElementById('hQl').value) / 3600;
+  const rhoL = parseFloat(document.getElementById('hRhoL').value);
+  const tr_min = parseFloat(document.getElementById('hTr').value);
+  const slenderness = parseFloat(document.getElementById('hSlender').value);
+
+  const statusEl = document.getElementById('horiz-status-panel');
+  const resultsEl = document.getElementById('horiz-results-panel');
+  const excelBtn = document.getElementById('horiz-excel-btn');
+
+  if ([Qg,rhoG,muG,dp,Ql,rhoL,tr_min,slenderness].some(v => isNaN(v)) || Qg<=0 || rhoG<=0 || muG<=0 || Ql<0 || rhoL<=0 || tr_min<=0 || slenderness<=1){
+    statusEl.innerHTML = '<div class="status-box status-err">Fill in all fields with valid, positive values (slenderness ratio must be &gt; 1).</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastHorizResult = null;
+    return;
+  }
+  if (rhoL <= rhoG){
+    statusEl.innerHTML = '<div class="status-box status-err">Liquid density must be greater than gas density.</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastHorizResult = null;
+    return;
+  }
+
+  const res = sizeHorizontal({ Qg, rhoG, muG, dp, Ql, rhoL, tr_s: tr_min*60, slenderness });
+  lastHorizResult = { ...res, inputs: { Qg: Qg*3600, rhoG, muG: muG*1000, dp: dp*1e6, Ql: Ql*3600, rhoL, tr_min, slenderness } };
+
+  statusEl.innerHTML = '<div class="status-box status-ok">Horizontal separator sized via droplet settling theory + liquid retention time (half-full basis, bisection on D at target L/D).</div>';
+
+  resultsEl.innerHTML = `<div class="panel">
+    <div class="section-title" style="margin-top:0">Droplet Settling</div>
+    <table class="results">
+      <tr><th>Design droplet size</th><td class="val">${fmt(dp*1e6,0)} µm</td></tr>
+      <tr><th>Settling regime used</th><td class="val">${res.regime}</td></tr>
+      <tr><th>Terminal (settling) velocity (Vt)</th><td class="val">${fmt(res.Vt,4)} m/s</td></tr>
+    </table>
+    <div class="section-title">Sizing (half-full basis)</div>
+    <table class="results">
+      <tr class="hl"><th>Governing diameter (D)</th><td class="val">${fmt(res.D,3)} m</td></tr>
+      <tr class="hl"><th>Shell length (L)</th><td class="val">${fmt(res.L,3)} m</td></tr>
+      <tr><th>Governed by</th><td class="val">${res.governedBy}</td></tr>
+      <tr><th>Achieved L/D ratio</th><td class="val">${fmt(res.rActual,2)} (target ${fmt(res.rTarget,2)})</td></tr>
+      <tr><th>Effective gas length (Leff = L − D)</th><td class="val">${fmt(res.Leff,3)} m</td></tr>
+    </table>
+    <div class="section-title">Verification</div>
+    <table class="results">
+      <tr><th>Actual gas velocity (half-full area)</th><td class="val">${fmt(res.Vg,3)} m/s</td></tr>
+      <tr><th>Gas residence time in Leff</th><td class="val">${fmt(res.tGasResidence,2)} s</td></tr>
+      <tr><th>Required droplet settling time</th><td class="val">${fmt(res.tSettle,2)} s</td></tr>
+      <tr><th>Gas capacity margin OK?</th><td class="val" style="color:${res.gasMarginOk ? '#256339' : 'var(--err)'}">${res.gasMarginOk ? 'Yes' : 'No — increase D or L'}</td></tr>
+      <tr><th>Achieved liquid retention time</th><td class="val">${fmt(res.achievedRetentionTime/60,2)} min (target ${fmt(res.rTarget && tr_min,2)} min)</td></tr>
+    </table>
+  </div>`;
+  excelBtn.disabled = false;
+}
+['hQg','hRhoG','hMuG','hDp','hQl','hRhoL','hTr','hSlender'].forEach(id => {
+  document.getElementById(id).addEventListener('input', runHorizontal);
+  document.getElementById(id).addEventListener('change', runHorizontal);
+});
+runHorizontal();
+
+document.getElementById('horiz-excel-btn').onclick = () => {
+  if (!lastHorizResult) return;
+  const r = lastHorizResult, inp = r.inputs;
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ['SEZTools - Horizontal Two-Phase Separator Sizing Report'],
+    ['(Droplet settling theory + liquid retention time; public-domain correlations)'],
+    [],
+    ['Input Data'],
+    ['Gas flow (Qg), actual', inp.Qg.toFixed(1), 'm3/hr'],
+    ['Gas density', inp.rhoG, 'kg/m3'],
+    ['Gas viscosity', inp.muG, 'cP'],
+    ['Design droplet size', inp.dp, 'micron'],
+    ['Liquid flow (Ql)', inp.Ql.toFixed(1), 'm3/hr'],
+    ['Liquid density', inp.rhoL, 'kg/m3'],
+    ['Retention time', inp.tr_min, 'min'],
+    ['Target slenderness ratio (L/D)', inp.slenderness],
+    [],
+    ['Results'],
+    ['Settling regime', r.regime],
+    ['Terminal velocity (Vt)', r.Vt.toFixed(4), 'm/s'],
+    ['Diameter (D)', r.D.toFixed(3), 'm'],
+    ['Length (L)', r.L.toFixed(3), 'm'],
+    ['Governed by', r.governedBy],
+    ['Achieved L/D', r.rActual.toFixed(2)],
+    ['Achieved retention time', (r.achievedRetentionTime/60).toFixed(2), 'min']
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Horizontal Separator');
+  XLSX.writeFile(wb, 'horizontal-separator-report.xlsx');
+};
+
+// ================= Horizontal three-phase tab wiring =================
+let lastHoriz3Result = null;
+function runHoriz3(){
+  const Qg = parseFloat(document.getElementById('t3Qg').value) / 3600;
+  const rhoG = parseFloat(document.getElementById('t3RhoG').value);
+  const muG = parseFloat(document.getElementById('t3MuG').value) / 1000;
+  const dpGas = parseFloat(document.getElementById('t3DpGas').value) * 1e-6;
+
+  const Qo = parseFloat(document.getElementById('t3Qo').value) / 3600;
+  const rhoOil = parseFloat(document.getElementById('t3RhoO').value);
+  const muOil = parseFloat(document.getElementById('t3MuO').value) / 1000;
+  const to_min = parseFloat(document.getElementById('t3To').value);
+  const dpWaterInOil = parseFloat(document.getElementById('t3DpWiO').value) * 1e-6;
+
+  const Qw = parseFloat(document.getElementById('t3Qw').value) / 3600;
+  const rhoWater = parseFloat(document.getElementById('t3RhoW').value);
+  const muWater = parseFloat(document.getElementById('t3MuW').value) / 1000;
+  const tw_min = parseFloat(document.getElementById('t3Tw').value);
+  const dpOilInWater = parseFloat(document.getElementById('t3DpOiW').value) * 1e-6;
+
+  const slenderness = parseFloat(document.getElementById('t3Slender').value);
+
+  const statusEl = document.getElementById('horiz3-status-panel');
+  const resultsEl = document.getElementById('horiz3-results-panel');
+  const excelBtn = document.getElementById('horiz3-excel-btn');
+
+  const vals = [Qg,rhoG,muG,dpGas,Qo,rhoOil,muOil,to_min,dpWaterInOil,Qw,rhoWater,muWater,tw_min,dpOilInWater,slenderness];
+  if (vals.some(v => isNaN(v)) || Qg<=0 || rhoG<=0 || muG<=0 || Qo<0 || rhoOil<=0 || muOil<=0 || to_min<=0 || Qw<0 || rhoWater<=0 || muWater<=0 || tw_min<=0 || slenderness<=1){
+    statusEl.innerHTML = '<div class="status-box status-err">Fill in all fields with valid, positive values (slenderness ratio must be &gt; 1).</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastHoriz3Result = null;
+    return;
+  }
+  if (rhoWater <= rhoOil){
+    statusEl.innerHTML = '<div class="status-box status-err">Water density must be greater than oil density.</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastHoriz3Result = null;
+    return;
+  }
+  if (rhoOil <= rhoG){
+    statusEl.innerHTML = '<div class="status-box status-err">Oil density must be greater than gas density.</div>';
+    resultsEl.innerHTML = ''; excelBtn.disabled = true; lastHoriz3Result = null;
+    return;
+  }
+
+  const res = sizeThreePhase({ Qg, rhoG, muG, dpGas, Qo, rhoOil, muOil, to_min, dpWaterInOil, Qw, rhoWater, muWater, tw_min, dpOilInWater, slenderness });
+  lastHoriz3Result = { ...res, inputs: {
+    Qg: Qg*3600, rhoG, muG: muG*1000, dpGas: dpGas*1e6,
+    Qo: Qo*3600, rhoOil, muOil: muOil*1000, to_min, dpWaterInOil: dpWaterInOil*1e6,
+    Qw: Qw*3600, rhoWater, muWater: muWater*1000, tw_min, dpOilInWater: dpOilInWater*1e6,
+    slenderness
+  }};
+
+  const warns = [];
+  if (!res.waterSettlingOk) warns.push('Water-in-oil settling check FAILS — the oil pad is not thick enough / oil retention time not long enough for the design water droplet to settle out. Increase oil retention time, increase slenderness ratio, or specify a larger design droplet size if defensible.');
+  if (!res.oilRiseOk) warns.push('Oil-in-water settling check FAILS — the water layer does not give enough time for the design oil droplet to rise out. Increase water retention time or slenderness ratio.');
+  if (!res.gasMarginOk) warns.push('Gas capacity margin FAILS — increase diameter or length.');
+
+  statusEl.innerHTML = (warns.length
+    ? warns.map(w => `<div class="status-box status-err" style="margin-bottom:4px;">${w}</div>`).join('')
+    : '<div class="status-box status-ok">Three-phase separator sized — gas capacity, liquid retention, and both interface settling checks pass.</div>');
+
+  resultsEl.innerHTML = `<div class="panel">
+    <div class="section-title" style="margin-top:0">Sizing (half-full total liquid level)</div>
+    <table class="results">
+      <tr class="hl"><th>Diameter (D)</th><td class="val">${fmt(res.D,3)} m</td></tr>
+      <tr class="hl"><th>Shell length (L)</th><td class="val">${fmt(res.L,3)} m</td></tr>
+      <tr><th>Governed by</th><td class="val">${res.governedBy}</td></tr>
+      <tr><th>Achieved L/D ratio</th><td class="val">${fmt(res.rActual,2)} (target ${fmt(res.rTarget,2)})</td></tr>
+    </table>
+    <div class="section-title">Liquid Interface Split</div>
+    <table class="results">
+      <tr><th>Liquid surface (NLL) height from bottom</th><td class="val">${fmt(res.hLiquidTop,3)} m</td></tr>
+      <tr><th>Water/oil interface height from bottom</th><td class="val">${fmt(res.hInterface,3)} m</td></tr>
+      <tr><th>Oil pad thickness</th><td class="val">${fmt(res.hOilPad,3)} m</td></tr>
+      <tr><th>Water layer cross-section area</th><td class="val">${fmt(res.Aw,3)} m²</td></tr>
+      <tr><th>Oil layer cross-section area</th><td class="val">${fmt(res.Ao,3)} m²</td></tr>
+      <tr><th>Achieved oil retention time</th><td class="val">${fmt(res.to_actual/60,2)} min</td></tr>
+      <tr><th>Achieved water retention time</th><td class="val">${fmt(res.tw_actual/60,2)} min</td></tr>
+    </table>
+    <div class="section-title">Settling Checks</div>
+    <table class="results">
+      <tr><th>Water-in-oil terminal velocity</th><td class="val">${fmt(res.waterInOil.Vt,5)} m/s (${res.waterInOil.regime})</td></tr>
+      <tr><th>Water settling time through oil pad</th><td class="val">${fmt(res.tSettleWaterInOil/60,2)} min</td></tr>
+      <tr><th>Water-in-oil check</th><td class="val" style="color:${res.waterSettlingOk ? '#256339' : 'var(--err)'}">${res.waterSettlingOk ? 'OK' : 'FAILS'}</td></tr>
+      <tr><th>Oil-in-water terminal velocity</th><td class="val">${fmt(res.oilInWater.Vt,5)} m/s (${res.oilInWater.regime})</td></tr>
+      <tr><th>Oil rise time through water layer</th><td class="val">${fmt(res.tSettleOilInWater/60,2)} min</td></tr>
+      <tr><th>Oil-in-water check</th><td class="val" style="color:${res.oilRiseOk ? '#256339' : 'var(--err)'}">${res.oilRiseOk ? 'OK' : 'FAILS'}</td></tr>
+    </table>
+    <div class="section-title">Gas Capacity Verification</div>
+    <table class="results">
+      <tr><th>Gas droplet settling regime</th><td class="val">${res.gasDroplet.regime}</td></tr>
+      <tr><th>Gas residence time in effective length</th><td class="val">${fmt(res.tGasResidence,2)} s</td></tr>
+      <tr><th>Required droplet settling time</th><td class="val">${fmt(res.tSettleGas,2)} s</td></tr>
+      <tr><th>Gas capacity check</th><td class="val" style="color:${res.gasMarginOk ? '#256339' : 'var(--err)'}">${res.gasMarginOk ? 'OK' : 'FAILS'}</td></tr>
+    </table>
+  </div>`;
+  excelBtn.disabled = false;
+}
+['t3Qg','t3RhoG','t3MuG','t3DpGas','t3Qo','t3RhoO','t3MuO','t3To','t3DpWiO','t3Qw','t3RhoW','t3MuW','t3Tw','t3DpOiW','t3Slender'].forEach(id => {
+  document.getElementById(id).addEventListener('input', runHoriz3);
+  document.getElementById(id).addEventListener('change', runHoriz3);
+});
+runHoriz3();
+
+document.getElementById('horiz3-excel-btn').onclick = () => {
+  if (!lastHoriz3Result) return;
+  const r = lastHoriz3Result, inp = r.inputs;
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ['SEZTools - Horizontal Three-Phase Separator Sizing Report'],
+    ['(Droplet settling theory + liquid retention time + circular-segment interface split; public-domain correlations)'],
+    [],
+    ['Input Data - Gas'],
+    ['Gas flow (Qg)', inp.Qg.toFixed(1), 'm3/hr'],
+    ['Gas density', inp.rhoG, 'kg/m3'],
+    ['Gas viscosity', inp.muG, 'cP'],
+    ['Design gas-space droplet size', inp.dpGas, 'micron'],
+    [],
+    ['Input Data - Oil'],
+    ['Oil flow (Qo)', inp.Qo.toFixed(1), 'm3/hr'],
+    ['Oil density', inp.rhoOil, 'kg/m3'],
+    ['Oil viscosity', inp.muOil, 'cP'],
+    ['Oil retention time', inp.to_min, 'min'],
+    ['Design water-in-oil droplet size', inp.dpWaterInOil, 'micron'],
+    [],
+    ['Input Data - Water'],
+    ['Water flow (Qw)', inp.Qw.toFixed(1), 'm3/hr'],
+    ['Water density', inp.rhoWater, 'kg/m3'],
+    ['Water viscosity', inp.muWater, 'cP'],
+    ['Water retention time', inp.tw_min, 'min'],
+    ['Design oil-in-water droplet size', inp.dpOilInWater, 'micron'],
+    [],
+    ['Target slenderness ratio (L/D)', inp.slenderness],
+    [],
+    ['Results'],
+    ['Diameter (D)', r.D.toFixed(3), 'm'],
+    ['Length (L)', r.L.toFixed(3), 'm'],
+    ['Governed by', r.governedBy],
+    ['Achieved L/D', r.rActual.toFixed(2)],
+    ['Water/oil interface height', r.hInterface.toFixed(3), 'm'],
+    ['Oil pad thickness', r.hOilPad.toFixed(3), 'm'],
+    ['Achieved oil retention time', (r.to_actual/60).toFixed(2), 'min'],
+    ['Achieved water retention time', (r.tw_actual/60).toFixed(2), 'min'],
+    ['Water-in-oil settling check', r.waterSettlingOk ? 'OK' : 'FAILS'],
+    ['Oil-in-water settling check', r.oilRiseOk ? 'OK' : 'FAILS'],
+    ['Gas capacity check', r.gasMarginOk ? 'OK' : 'FAILS']
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Three-Phase Separator');
+  XLSX.writeFile(wb, 'three-phase-separator-report.xlsx');
+};
+</script>
+</body>
+</html>

@@ -95,7 +95,7 @@
   </div>
 
   <div style="display:flex; gap:6px; margin-bottom:16px;">
-    <button class="tab-btn active" data-tab="tab-hd" style="font-size:12px; font-weight:600; padding:7px 14px;">Height &amp; Diameter</button>
+    <button class="tab-btn active" data-tab="tab-hd" style="font-size:12px; font-weight:600; padding:7px 14px;">Sizing</button>
     <button class="tab-btn" data-tab="tab-vent" style="font-size:12px; font-weight:600; padding:7px 14px;">Venting (Normal)</button>
     <button class="tab-btn" data-tab="tab-fire" style="font-size:12px; font-weight:600; padding:7px 14px;">Venting (Fire)</button>
   </div>
@@ -916,6 +916,7 @@ document.getElementById('fire-excel-btn').onclick = () => {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Fire Venting');
   XLSX.writeFile(wb, 'fire-venting-report.xlsx');
 };
+
 </script>
 </body>
 </html>
