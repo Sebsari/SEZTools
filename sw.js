@@ -1,4 +1,4 @@
-const CACHE_NAME = 'seztools-v22';
+const CACHE_NAME = 'seztools-v23';
 const CORE_ASSETS = [
   './',
   './index.html',

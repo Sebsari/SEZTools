@@ -44,8 +44,8 @@
   button:hover:not(:disabled) { border-color: var(--text-accent); color: var(--text-accent); }
   input, select {
     font-family: inherit;
-    font-size: 13px;
-    padding: 6px 8px;
+    font-size: 14px;
+    padding: 7px 9px;
     border: 1px solid var(--border);
     border-radius: var(--r-sm);
     background: var(--surface-2);
@@ -59,11 +59,12 @@
   .subtitle { font-size: 12px; color: var(--text-muted); margin: 0 0 20px; }
   .section-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .5px; margin: 22px 0 10px; }
   .field-grid { display: flex; flex-wrap: wrap; gap: 12px 16px; }
-  .field { display: flex; flex-direction: column; gap: 4px; min-width: 170px; max-width: 230px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 190px; max-width: 260px; }
   .field label { font-size: 11px; color: var(--text-secondary); }
   .field .hint { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
-  .field-row { display: flex; gap: 6px; align-items: center; }
+  .field-row { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
   .field-row select { flex-shrink: 0; }
+  .unit-label { font-size: 14px; color: var(--text-secondary); flex-shrink: 0; white-space: nowrap; }
   .panel { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem; margin-top: 1rem; }
   table.results { width: 100%; border-collapse: collapse; font-size: 12px; }
   table.results td, table.results th { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
@@ -108,34 +109,31 @@
     <div class="field">
       <label>Net working capacity</label>
       <div class="field-row">
-        <input type="number" id="v1" value="6000" step="any">
-        <select id="v1Unit">
-          <option value="bbl" selected>barrel</option>
-          <option value="m3">m³</option>
-        </select>
+        <input type="number" id="v1" value="953.9" step="any">
+        <span class="unit-label">m³</span>
       </div>
     </div>
     <div class="field">
       <label>Outlet line diameter (d1)</label>
-      <div class="field-row"><input type="number" id="d1" value="12" step="any"><span class="hint" style="flex-shrink:0">in</span></div>
+      <div class="field-row"><input type="number" id="d1" value="12" step="any"><span class="unit-label">in</span></div>
     </div>
     <div class="field">
       <label>Overflow line diameter (d2)</label>
-      <div class="field-row"><input type="number" id="d2" value="0" step="any"><span class="hint" style="flex-shrink:0">in</span></div>
+      <div class="field-row"><input type="number" id="d2" value="0" step="any"><span class="unit-label">in</span></div>
       <div class="hint">leave 0 if no overflow line</div>
     </div>
     <div class="field">
       <label>Draw off flowrate (Q2)</label>
-      <div class="field-row"><input type="number" id="q2" value="400" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+      <div class="field-row"><input type="number" id="q2" value="400" step="any"><span class="unit-label">m³/hr</span></div>
     </div>
     <div class="field">
       <label>Filling flowrate (Q1) — optional</label>
-      <div class="field-row"><input type="number" id="q1" value="400" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+      <div class="field-row"><input type="number" id="q1" value="400" step="any"><span class="unit-label">m³/hr</span></div>
       <div class="hint">for record/report only, not used in this calc</div>
     </div>
     <div class="field">
       <label>Max operating density — optional</label>
-      <div class="field-row"><input type="number" id="dmax" value="" step="any"><span class="hint" style="flex-shrink:0">kg/m³</span></div>
+      <div class="field-row"><input type="number" id="dmax" value="" step="any"><span class="unit-label">kg/m³</span></div>
       <div class="hint">for record/report only, not used in this calc</div>
     </div>
   </div>
@@ -441,8 +439,7 @@ function fmt(x, d=2){ return (Math.round(x * Math.pow(10,d)) / Math.pow(10,d)).t
 let lastResult = null, lastInputs = null;
 
 function runHD() {
-  const v1raw = parseFloat(document.getElementById('v1').value);
-  const v1unit = document.getElementById('v1Unit').value;
+  const V1 = parseFloat(document.getElementById('v1').value);
   const d1 = parseFloat(document.getElementById('d1').value);
   const d2 = parseFloat(document.getElementById('d2').value) || 0;
   const q2 = parseFloat(document.getElementById('q2').value);
@@ -453,7 +450,7 @@ function runHD() {
   const resultsEl = document.getElementById('results-panel');
   const pdfBtn = document.getElementById('pdf-btn'), excelBtn = document.getElementById('excel-btn');
 
-  if (isNaN(v1raw) || v1raw <= 0 || isNaN(d1) || d1 <= 0 || isNaN(q2) || q2 <= 0){
+  if (isNaN(V1) || V1 <= 0 || isNaN(d1) || d1 <= 0 || isNaN(q2) || q2 <= 0){
     statusEl.innerHTML = '<div class="status-box status-err">Fill in net working capacity, outlet line diameter and draw off flowrate (all &gt; 0).</div>';
     resultsEl.innerHTML = '';
     pdfBtn.disabled = true; excelBtn.disabled = true;
@@ -461,7 +458,6 @@ function runHD() {
     return;
   }
 
-  const V1 = v1unit === 'bbl' ? v1raw * 0.158987 : v1raw;
   const res = findSize(V1, d1, d2, q2);
 
   if (!res){
@@ -473,13 +469,13 @@ function runHD() {
   }
 
   lastResult = res;
-  lastInputs = { v1raw, v1unit, V1, d1, d2, q2, q1, dmax };
+  lastInputs = { V1, d1, d2, q2, q1, dmax };
 
   statusEl.innerHTML = '<div class="status-box status-ok">Sizing complete.</div>';
   resultsEl.innerHTML = renderResults(res);
   pdfBtn.disabled = false; excelBtn.disabled = false;
 }
-['v1','v1Unit','d1','d2','q2','q1','dmax'].forEach(id => {
+['v1','d1','d2','q2','q1','dmax'].forEach(id => {
   document.getElementById(id).addEventListener('input', runHD);
   document.getElementById(id).addEventListener('change', runHD);
 });
@@ -523,7 +519,7 @@ document.getElementById('pdf-btn').onclick = () => {
     <h2>SEZTools &mdash; Tank Sizing Report</h2>
     <div class="rpt-section-title">1. INPUT DATA</div>
     <table>
-      <tr><td>Net working capacity (V1)</td><td>${fmt(inp.v1raw,2)} ${inp.v1unit} (${fmt(inp.V1,2)} m³)</td></tr>
+      <tr><td>Net working capacity (V1)</td><td>${fmt(inp.V1,2)} m³</td></tr>
       <tr><td>Outlet line diameter (d1)</td><td>${fmt(inp.d1,2)} in</td></tr>
       <tr><td>Overflow line diameter (d2)</td><td>${fmt(inp.d2,2)} in</td></tr>
       <tr><td>Draw off flowrate (Q2)</td><td>${fmt(inp.q2,2)} m³/hr</td></tr>
@@ -556,7 +552,7 @@ document.getElementById('excel-btn').onclick = () => {
     ['SEZTools - Tank Sizing Report'],
     [],
     ['Input Data'],
-    ['Net working capacity (V1)', `${inp.v1raw} ${inp.v1unit}`, `${inp.V1.toFixed(2)} m3`],
+    ['Net working capacity (V1)', inp.V1, 'm3'],
     ['Outlet line diameter (d1)', inp.d1, 'in'],
     ['Overflow line diameter (d2)', inp.d2, 'in'],
     ['Draw off flowrate (Q2)', inp.q2, 'm3/hr'],
