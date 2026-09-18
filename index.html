@@ -145,7 +145,6 @@
   }
   .back-btn:hover{border-color:var(--accent); color:var(--accent)}
   .back-btn svg{width:14px; height:14px}
-  .module-bar .m-title{font-size:12px; font-weight:600; color:var(--text)}
   .module-frame-wrap{flex:1; position:relative}
   #moduleFrame{position:absolute; inset:0; width:100%; height:100%; border:none; background:var(--surface)}
   .frame-loading{
@@ -258,7 +257,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
         Modules
       </button>
-      <span class="m-title" id="moduleTitle"></span>
     </div>
     <div class="module-frame-wrap">
       <div class="frame-loading" id="frameLoading">LOADING…</div>
@@ -279,14 +277,11 @@
 
   var frame = document.getElementById('moduleFrame');
   var frameLoading = document.getElementById('frameLoading');
-  var moduleTitle = document.getElementById('moduleTitle');
   var loadedSrc = null;
 
   document.querySelectorAll('.mod-card').forEach(function(card){
     card.addEventListener('click', function(){
       var src = card.getAttribute('data-module');
-      var title = card.getAttribute('data-title');
-      moduleTitle.textContent = title;
       show('module');
       if (loadedSrc !== src){
         frameLoading.style.opacity = '1';

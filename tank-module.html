@@ -109,26 +109,26 @@
     <div class="field">
       <label>Net working capacity</label>
       <div class="field-row">
-        <input type="number" id="v1" value="953.9" step="any">
+        <input type="number" id="v1" value="" step="any">
         <span class="unit-label">m³</span>
       </div>
     </div>
     <div class="field">
       <label>Outlet line diameter (d1)</label>
-      <div class="field-row"><input type="number" id="d1" value="12" step="any"><span class="unit-label">in</span></div>
+      <div class="field-row"><input type="number" id="d1" value="" step="any"><span class="unit-label">in</span></div>
     </div>
     <div class="field">
       <label>Overflow line diameter (d2)</label>
-      <div class="field-row"><input type="number" id="d2" value="0" step="any"><span class="unit-label">in</span></div>
+      <div class="field-row"><input type="number" id="d2" value="" step="any"><span class="unit-label">in</span></div>
       <div class="hint">leave 0 if no overflow line</div>
     </div>
     <div class="field">
       <label>Draw off flowrate (Q2)</label>
-      <div class="field-row"><input type="number" id="q2" value="400" step="any"><span class="unit-label">m³/hr</span></div>
+      <div class="field-row"><input type="number" id="q2" value="" step="any"><span class="unit-label">m³/hr</span></div>
     </div>
     <div class="field">
       <label>Filling flowrate (Q1) — optional</label>
-      <div class="field-row"><input type="number" id="q1" value="400" step="any"><span class="unit-label">m³/hr</span></div>
+      <div class="field-row"><input type="number" id="q1" value="" step="any"><span class="unit-label">m³/hr</span></div>
       <div class="hint">for record/report only, not used in this calc</div>
     </div>
     <div class="field">
@@ -161,11 +161,11 @@
     </div>
     <div class="field">
       <label>Max filling rate (Vpf)</label>
-      <div class="field-row"><input type="number" id="vVpf" value="400" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+      <div class="field-row"><input type="number" id="vVpf" value="" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
     </div>
     <div class="field">
       <label>Max discharge rate (Vpe)</label>
-      <div class="field-row"><input type="number" id="vVpe" value="400" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
+      <div class="field-row"><input type="number" id="vVpe" value="" step="any"><span class="hint" style="flex-shrink:0">m³/hr</span></div>
     </div>
   </div>
 
@@ -173,7 +173,7 @@
   <div class="field-grid">
     <div class="field">
       <label>Tank volume (Vtk)</label>
-      <div class="field-row"><input type="number" id="vVtk" value="1089" step="any"><span class="hint" style="flex-shrink:0">m³</span></div>
+      <div class="field-row"><input type="number" id="vVtk" value="" step="any"><span class="hint" style="flex-shrink:0">m³</span></div>
       <div class="hint">use the Nominal Capacity from Height &amp; Diameter</div>
     </div>
     <div class="field">
@@ -213,15 +213,15 @@
     </div>
     <div class="field">
       <label>Inside heat-transfer coeff. (h)</label>
-      <div class="field-row"><input type="number" id="vH" value="4" step="any"><span class="hint" style="flex-shrink:0">W/m²·K</span></div>
+      <div class="field-row"><input type="number" id="vH" value="" step="any"><span class="hint" style="flex-shrink:0">W/m²·K</span></div>
     </div>
     <div class="field">
       <label>Insulation thickness (lin)</label>
-      <div class="field-row"><input type="number" id="vLin" value="0.1" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
+      <div class="field-row"><input type="number" id="vLin" value="" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
     </div>
     <div class="field">
       <label>Insulation conductivity (λin)</label>
-      <div class="field-row"><input type="number" id="vLam" value="0.05" step="any"><span class="hint" style="flex-shrink:0">W/m·K</span></div>
+      <div class="field-row"><input type="number" id="vLam" value="" step="any"><span class="hint" style="flex-shrink:0">W/m·K</span></div>
     </div>
     <div class="field">
       <label>Total tank surface area (ATTS) — partial only</label>
@@ -265,11 +265,11 @@
     </div>
     <div class="field">
       <label>Diameter (D)</label>
-      <div class="field-row"><input type="number" id="fD" value="10" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
+      <div class="field-row"><input type="number" id="fD" value="" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
     </div>
     <div class="field" id="fDim2Field">
       <label id="fDim2Label">Height (H)</label>
-      <div class="field-row"><input type="number" id="fDim2" value="14" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
+      <div class="field-row"><input type="number" id="fDim2" value="" step="any"><span class="hint" style="flex-shrink:0">m</span></div>
     </div>
   </div>
   <div class="hint" style="margin-top:6px;">Wetted area: vertical = shell area up to 9.14 m above grade; horizontal/sphere = 75%/55% of total surface area (the standard's height-based alternative for unusually large horizontal/sphere vessels isn't automated here — use engineering judgment per §3.3.3.3.3, footnote a).</div>
@@ -278,7 +278,7 @@
   <div class="field-grid">
     <div class="field">
       <label>Design pressure</label>
-      <div class="field-row"><input type="number" id="fP" value="20" step="any"><span class="hint" style="flex-shrink:0">kPag</span></div>
+      <div class="field-row"><input type="number" id="fP" value="" step="any"><span class="hint" style="flex-shrink:0">kPag</span></div>
     </div>
     <div class="field">
       <label>Method</label>
@@ -309,15 +309,15 @@
   <div class="field-grid" id="fGeneralFields" style="display:none;">
     <div class="field">
       <label>Latent heat of vaporization (L)</label>
-      <div class="field-row"><input type="number" id="fL" value="335" step="any"><span class="hint" style="flex-shrink:0">kJ/kg</span></div>
+      <div class="field-row"><input type="number" id="fL" value="" step="any"><span class="hint" style="flex-shrink:0">kJ/kg</span></div>
     </div>
     <div class="field">
       <label>Molecular mass (M)</label>
-      <div class="field-row"><input type="number" id="fM" value="86.17" step="any"><span class="hint" style="flex-shrink:0">kg/kmol</span></div>
+      <div class="field-row"><input type="number" id="fM" value="" step="any"><span class="hint" style="flex-shrink:0">kg/kmol</span></div>
     </div>
     <div class="field">
       <label>Relieving temperature (T)</label>
-      <div class="field-row"><input type="number" id="fT" value="15.6" step="any"><span class="hint" style="flex-shrink:0">°C</span></div>
+      <div class="field-row"><input type="number" id="fT" value="" step="any"><span class="hint" style="flex-shrink:0">°C</span></div>
       <div class="hint">usually the bubble point at relieving pressure</div>
     </div>
   </div>

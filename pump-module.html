@@ -1039,8 +1039,14 @@ function computeSummary() {
   const destOpPress = parseFloat(endNode.data.opress);
   const pressuresOk = !isNaN(suctionOpPress) && !isNaN(destOpPress);
 
+  // Both static heads must be measured from the same physical pump
+  // reference point for TDH (discharge - suction) to be correct \u2014 that
+  // reference is the pump suction nozzle centerline (elevPumpSuctionNozzle),
+  // not the equipment's installation/base elevation. Using elevPump here
+  // silently introduced an error equal to the suction-nozzle offset
+  // whenever that field was filled in (flagged by Sadeghi).
   const staticHeadSuction = llll - elevPumpSuctionNozzle;
-  const staticHeadDischarge = elevEndNozzle - elevPump;
+  const staticHeadDischarge = elevEndNozzle - elevPumpSuctionNozzle;
 
   const suctionPress = (pressuresOk && sucRho !== null && sucDp !== null) ? suctionOpPress + (sucRho*g*staticHeadSuction)/1e5 - sucDp : null;
   const dischargePress = (pressuresOk && disRho !== null && disDp !== null) ? destOpPress + (disRho*g*staticHeadDischarge)/1e5 + disDp : null;
@@ -1568,7 +1574,9 @@ function controlValveDatasheetHtml(r0) {
   const normalLineFlow = computeFlowMapForBase('flow');
   const caseKeys = [{key:'qMin', label:'Min'}, {key:'flow', label:'Normal'}, {key:'qMax', label:'Max'}];
   const disRho = parseFloat(getZone(nodeZone(nodes.length - 1)).density) || null;
-  const elevPump = parseFloat(nodes[pumpIdx].data.elevation) || 0;
+  const elevPumpBase = parseFloat(nodes[pumpIdx].data.elevation) || 0;
+  const suctionNozzleOffsetCV = (nodes[pumpIdx].data.suction_nozzle_elev !== undefined && nodes[pumpIdx].data.suction_nozzle_elev !== '') ? parseFloat(nodes[pumpIdx].data.suction_nozzle_elev) : 0;
+  const elevPump = elevPumpBase + suctionNozzleOffsetCV; // pump datum = suction nozzle centerline, matching the main TDH calc
   const g = 9.81;
 
   // Friction-only (Q\u00b2-scaled) sum between two node indices \u2014 elevation is
@@ -1773,7 +1781,9 @@ document.getElementById('excel-btn').onclick = (e) => {
       // Re-derive per-case values the same way controlValveDatasheetHtml does.
       const normalLineFlow = computeFlowMapForBase('flow');
       const disRho2 = parseFloat(getZone(nodeZone(nodes.length-1)).density) || null;
-      const elevPump2 = parseFloat(pumpNode.data.elevation) || 0;
+      const elevPumpBase2 = parseFloat(pumpNode.data.elevation) || 0;
+      const suctionNozzleOffsetCV2 = (pumpNode.data.suction_nozzle_elev !== undefined && pumpNode.data.suction_nozzle_elev !== '') ? parseFloat(pumpNode.data.suction_nozzle_elev) : 0;
+      const elevPump2 = elevPumpBase2 + suctionNozzleOffsetCV2; // pump datum = suction nozzle centerline, matching the main TDH calc
       const g2 = 9.81;
       const elevValveRaw = parseFloat(nd.data.elevation);
       const elevValve = isNaN(elevValveRaw) ? elevPump2 : elevValveRaw;
